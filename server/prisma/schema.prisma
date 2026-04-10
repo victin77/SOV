@@ -1,0 +1,290 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  SELLER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole @default(SELLER)
+  avatar    String?
+  phone     String?
+  whatsappNumber String?
+  active    Boolean  @default(true)
+  lastSeenAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+
+  leads         Lead[]
+  appointments  Appointment[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model Lead {
+  id          String     @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  company     String?
+  position    String?
+  pipelinePosition Int   @default(0)
+  status      LeadStatus @default(NEW)
+  priority    Priority   @default(MEDIUM)
+  score       Int        @default(0)
+  value       Float?
+  source      String?
+  notes       String?
+  lostReason  String?
+  wonDate     DateTime?
+  lostDate    DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  tenant    Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+
+  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
+  assignedToId String?
+
+  stage   PipelineStage? @relation(fields: [stageId], references: [id])
+  stageId String?
+
+  tags         LeadTag[]
+  appointments Appointment[]
+  activities   Activity[]
+  customFields LeadCustomField[]
+
+  @@index([status])
+  @@index([assignedToId])
+  @@index([stageId])
+  @@index([companyId])
+  @@map("leads")
+}
+
+model PipelineStage {
+  id        String   @id @default(cuid())
+  name      String
+  color     String   @default("#6366f1")
+  order     Int
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+
+  leads Lead[]
+
+  @@index([companyId])
+  @@map("pipeline_stages")
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String
+  color String @default("#6366f1")
+
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+
+  leads LeadTag[]
+
+  @@index([companyId])
+  @@unique([companyId, name])
+  @@map("tags")
+}
+
+model LeadTag {
+  leadId String
+  tagId  String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, tagId])
+  @@map("lead_tags")
+}
+
+model Appointment {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  location    String?
+  completed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadId String
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  @@index([startDate])
+  @@index([userId])
+  @@index([companyId])
+  @@map("appointments")
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  type        String
+  description String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadId String
+
+  @@index([leadId])
+  @@index([companyId])
+  @@map("activities")
+}
+
+model LeadCustomField {
+  id     String @id @default(cuid())
+  key    String
+  value  String
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, key])
+  @@map("lead_custom_fields")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String?
+  details   Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([entity])
+  @@index([companyId])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  type      String   @default("info")
+  link      String?
+  createdAt DateTime @default(now())
+
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  @@index([userId, read])
+  @@index([companyId])
+  @@map("notifications")
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users             User[]
+  leads             Lead[]
+  pipelineStages    PipelineStage[]
+  tags              Tag[]
+  appointments      Appointment[]
+  activities        Activity[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  whatsappConfig    CompanyWhatsAppConfig?
+
+  @@map("companies")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model CompanyWhatsAppConfig {
+  id                         String   @id @default(cuid())
+  apiTokenEncrypted          String?
+  phoneNumberId              String?
+  webhookVerifyTokenEncrypted String?
+  appSecretEncrypted         String?
+  apiVersion                 String   @default("v22.0")
+  enabled                    Boolean  @default(false)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String  @unique
+
+  @@map("company_whatsapp_configs")
+}
