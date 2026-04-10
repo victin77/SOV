@@ -353,7 +353,7 @@ async function importLeadRows(rows: Record<string, unknown>[], importingUserId: 
       });
 
       if (leadInput.updatedAt) {
-        await tx.$executeRaw`UPDATE leads SET updatedAt = ${leadInput.updatedAt} WHERE id = ${lead.id}`;
+        await tx.$executeRaw`UPDATE leads SET "updatedAt" = ${leadInput.updatedAt} WHERE id = ${lead.id}`;
       }
 
       if (tagIds.length) {
