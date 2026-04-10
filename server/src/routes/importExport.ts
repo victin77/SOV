@@ -374,7 +374,7 @@ async function importLeadRows(rows: Record<string, unknown>[], importingUserId: 
     });
 
     return imported;
-  });
+  }, { timeout: 60000 });
 }
 
 async function buildImportPreview(rows: Record<string, unknown>[], importingUserId: string, format: 'json' | 'xlsx') {
