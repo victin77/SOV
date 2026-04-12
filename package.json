@@ -1,0 +1,19 @@
+{
+  "name": "crm-leads",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "build": "cd server && rm -rf dist && npx prisma generate && npm run build && cd ../client && npm run build",
+    "start": "cd server && npx prisma db push --skip-generate && node dist/index.js",
+    "db:push": "cd server && npx prisma db push",
+    "db:seed": "cd server && npx ts-node src/seed.ts",
+    "postinstall": "cd server && npm install && cd ../client && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
