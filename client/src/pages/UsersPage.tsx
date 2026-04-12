@@ -16,7 +16,7 @@ export default function UsersPage() {
   const [editing, setEditing] = useState<User | null>(null);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'SELLER', phone: '', whatsappNumber: '' });
 
-  const isAdmin = isAdmin || me?.role === 'SUPER_ADMIN';
+  const isAdmin = me?.role === 'ADMIN' || me?.role === 'SUPER_ADMIN';
 
   const load = () => {
     api.getUsers()
