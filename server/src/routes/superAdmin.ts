@@ -225,6 +225,61 @@ router.put('/companies/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Delete company permanently
+router.delete('/companies/:id', async (req: Request, res: Response) => {
+  try {
+    const companyId = req.params.id as string;
+
+    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    if (!company) {
+      res.status(404).json({ error: 'Empresa não encontrada' });
+      return;
+    }
+
+    // Limpar todas as relações antes de excluir a empresa
+    // 1. Dados ligados a leads (cascateiam do lead, mas appointments tem userId obrigatório)
+    await prisma.appointment.deleteMany({ where: { companyId } });
+    await prisma.activity.deleteMany({ where: { companyId } });
+    await prisma.notification.deleteMany({ where: { companyId } });
+    await prisma.auditLog.deleteMany({ where: { companyId } });
+
+    // 2. Leads (LeadTag, LeadCustomField, Activity cascateiam automaticamente)
+    await prisma.lead.deleteMany({ where: { companyId } });
+
+    // 3. Tags e pipeline stages
+    await prisma.tag.deleteMany({ where: { companyId } });
+    await prisma.pipelineStage.deleteMany({ where: { companyId } });
+
+    // 4. Refresh tokens dos usuarios da empresa
+    const userIds = (await prisma.user.findMany({ where: { companyId }, select: { id: true } })).map(u => u.id);
+    if (userIds.length > 0) {
+      await prisma.refreshToken.deleteMany({ where: { userId: { in: userIds } } });
+    }
+
+    // 5. Usuarios da empresa
+    await prisma.user.deleteMany({ where: { companyId } });
+
+    // 6. WhatsApp config (cascade, mas por segurança)
+    await prisma.companyWhatsAppConfig.deleteMany({ where: { companyId } });
+
+    // 7. Finalmente, a empresa
+    await prisma.company.delete({ where: { id: companyId } });
+
+    await logAudit({
+      userId: req.user!.userId,
+      action: 'DELETE_COMPANY',
+      entity: 'company',
+      entityId: companyId,
+      details: { companyName: company.name, companySlug: company.slug },
+    });
+
+    res.json({ message: 'Empresa excluída permanentemente' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao excluir empresa' });
+  }
+});
+
 // Company metrics
 router.get('/companies/:id/metrics', async (req: Request, res: Response) => {
   try {

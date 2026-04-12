@@ -318,6 +318,9 @@ export const api = {
   updateCompany: (id: string, data: { name?: string; active?: boolean }) =>
     request<any>(`/super-admin/companies/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 
+  deleteCompany: (id: string) =>
+    request<any>(`/super-admin/companies/${id}`, { method: 'DELETE' }),
+
   getCompanyMetrics: (id: string) =>
     request<any>(`/super-admin/companies/${id}/metrics`),
 

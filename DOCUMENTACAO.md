@@ -516,4 +516,4 @@ Tudo bem! O CRM funciona normalmente sem a Cloud API. Quando voce envia uma mens
 
 | Data | O que mudou |
 |---|---|
-| 2026-04-12 | Super Admin agora pode fazer todas as acoes de Admin ao entrar numa empresa (criar/editar usuarios, gerenciar pipeline, etc). Adicionada opcao de excluir usuarios permanentemente (antes so desativava). Botao "Excluir" disponivel tanto no painel do Super Admin quanto na tela de Usuarios. |
+| 2026-04-12 | Super Admin agora pode fazer todas as acoes de Admin ao entrar numa empresa (criar/editar usuarios, gerenciar pipeline, etc). Adicionada opcao de excluir usuarios permanentemente (antes so desativava). Botao "Excluir" disponivel tanto no painel do Super Admin quanto na tela de Usuarios. Super Admin agora pode excluir empresas permanentemente (com dupla confirmacao). |

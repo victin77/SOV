@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2, Users, Target, Plus, LogIn, Power, PowerOff,
-  X, Eye, BarChart3, LogOut, Shield,
+  X, Eye, BarChart3, LogOut, Shield, Trash2,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/client';
@@ -162,6 +162,17 @@ export default function SuperAdmin() {
     }
   };
 
+  const handleDeleteCompany = async (company: SuperAdminCompany) => {
+    if (!confirm(`Excluir "${company.name}" permanentemente?\n\nTodos os dados serao apagados: usuarios, leads, pipeline, tags, agendamentos, atividades e configuracoes.\n\nEsta acao NAO pode ser desfeita.`)) return;
+    if (!confirm(`TEM CERTEZA? Digite OK para confirmar a exclusao de "${company.name}".`)) return;
+    try {
+      await api.deleteCompany(company.id);
+      loadDashboard();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950">
@@ -289,6 +300,15 @@ export default function SuperAdmin() {
                     >
                       {company.active ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
                       {company.active ? 'Desativar' : 'Ativar'}
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteCompany(company)}
+                      className="text-sm px-3 py-1.5 rounded-xl border border-red-300 text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/15 flex items-center gap-1.5 transition-colors"
+                      title="Excluir empresa permanentemente"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Excluir
                     </button>
                   </div>
                 </div>
