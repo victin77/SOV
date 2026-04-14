@@ -48,7 +48,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}, allowRetr
 
   const res = await fetch(`${BASE_URL}${endpoint}`, { ...options, credentials: 'same-origin', headers });
 
-  if (res.status === 401) {
+  const shouldHandleUnauthorizedRedirect = !['/auth/login', '/auth/refresh', '/auth/me'].includes(endpoint);
+
+  if (res.status === 401 && shouldHandleUnauthorizedRedirect) {
     const canRefresh = allowRetry && endpoint !== '/auth/refresh' && !isImpersonating();
 
     if (canRefresh) {
@@ -59,7 +61,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}, allowRetr
     }
 
     clearSession();
-    window.location.href = '/login';
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
     throw new Error('Nao autenticado');
   }
 
