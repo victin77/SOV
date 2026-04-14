@@ -31,6 +31,12 @@ function normalizeLookup(value?: string | null) {
     .toLowerCase();
 }
 
+function getLookupTokens(value?: string | null) {
+  return normalizeLookup(value)
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 3);
+}
+
 function readText(...values: unknown[]) {
   for (const value of values) {
     if (value === null || value === undefined) continue;
@@ -189,6 +195,33 @@ function buildStatusDates(status: LeadStatus, createdAt?: Date | null, updatedAt
   };
 }
 
+function readOwner(row: Record<string, unknown>) {
+  return readText(
+    row.ownerEmail,
+    row.OwnerEmail,
+    row.owner_email,
+    row.assignedToEmail,
+    row.AssignedToEmail,
+    row.responsavelEmail,
+    row.ResponsavelEmail,
+    row.emailResponsavel,
+    row.EmailResponsavel,
+    row['EmailResponsavel'],
+    row['Email do responsavel'],
+    row['Email do respons\u00e1vel'],
+    row['E-mail do responsavel'],
+    row['E-mail do respons\u00e1vel'],
+    row.owner,
+    row.Owner,
+    row.responsavel,
+    row.Responsavel,
+    row['Responsavel'],
+    row['Respons\u00e1vel'],
+    row['respons\u00e1vel'],
+    row['ResponsÃ¡vel'],
+  );
+}
+
 function resolveOwnerId(
   users: Array<{ id: string; name: string; email: string }>,
   ownerValue: unknown,
@@ -227,7 +260,7 @@ function resolveOwnerMatch(
   };
 }
 
-function findOwnerUser(
+export function findOwnerUser(
   users: Array<{ id: string; name: string; email: string }>,
   requestedOwner: string,
 ) {
@@ -249,7 +282,18 @@ function findOwnerUser(
       && (normalizedName.includes(normalizedOwner) || normalizedOwner.includes(normalizedName));
   });
 
-  return partialNameMatches.length === 1 ? partialNameMatches[0] : null;
+  if (partialNameMatches.length === 1) return partialNameMatches[0];
+
+  const ownerTokens = new Set(getLookupTokens(requestedOwner));
+  if (ownerTokens.size) {
+    const tokenNameMatches = users.filter((user) => (
+      getLookupTokens(user.name).some((token) => ownerTokens.has(token))
+    ));
+
+    if (tokenNameMatches.length === 1) return tokenNameMatches[0];
+  }
+
+  return null;
 }
 
 async function ensureStage(
@@ -321,7 +365,7 @@ async function ensureTags(
   return tagIds;
 }
 
-function mapRowToLeadInput(row: Record<string, unknown>) {
+export function mapRowToLeadInput(row: Record<string, unknown>) {
   const status = parseLeadStatus(
     readText(row.status, row.Status, row.situacao, row.Situacao),
   ) || 'NEW';
@@ -350,7 +394,7 @@ function mapRowToLeadInput(row: Record<string, unknown>) {
     value: parseOptionalNumber(row.valor, row.Valor, row.value, row.Value),
     notes: buildNotes(row),
     lostReason: readText(row.lossReason, row.LossReason, row.lossreason, row.motivoPerda, row.motivo_perda),
-    owner: readText(row.owner, row.Owner, row.responsavel, row.Responsavel, row['Responsável']),
+    owner: readOwner(row),
     tags: extractTagNames(row.tags ?? row.Tags),
     stageName,
     createdAt,
@@ -559,6 +603,7 @@ router.get('/json', async (req: Request, res: Response) => {
       fonte: lead.source,
       notas: lead.notes,
       responsavel: lead.assignedTo?.name,
+      responsavelEmail: lead.assignedTo?.email,
       etapa: lead.stage?.name,
       tags: lead.tags.map((tag) => tag.tag.name).join(', '),
       score: lead.score,
@@ -582,7 +627,7 @@ router.get('/xlsx', async (req: Request, res: Response) => {
     const leads = await prisma.lead.findMany({
       where,
       include: {
-        assignedTo: { select: { name: true } },
+        assignedTo: { select: { name: true, email: true } },
         stage: { select: { name: true } },
         tags: { include: { tag: { select: { name: true } } } },
       },
@@ -599,6 +644,7 @@ router.get('/xlsx', async (req: Request, res: Response) => {
       Valor: lead.value ?? 0,
       Fonte: lead.source || '',
       Responsavel: lead.assignedTo?.name || '',
+      EmailResponsavel: lead.assignedTo?.email || '',
       Etapa: lead.stage?.name || '',
       Tags: lead.tags.map((tag) => tag.tag.name).join(', '),
       Score: lead.score,
