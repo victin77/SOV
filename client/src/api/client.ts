@@ -4,23 +4,15 @@ const REFRESH_TOKEN_KEY = 'crm_refresh_token';
 const ORIGINAL_TOKEN_KEY = 'crm_original_token';
 const ORIGINAL_REFRESH_TOKEN_KEY = 'crm_original_refresh_token';
 
-function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
-}
-
 function isImpersonating(): boolean {
-  return !!localStorage.getItem(ORIGINAL_TOKEN_KEY);
+  return !!localStorage.getItem('crm_impersonate_company_id');
 }
 
-function storeSession(token: string, refreshToken?: string | null) {
-  localStorage.setItem(TOKEN_KEY, token);
-  if (refreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  }
+function storeSession(_token?: string | null, _refreshToken?: string | null) {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(ORIGINAL_TOKEN_KEY);
+  localStorage.removeItem(ORIGINAL_REFRESH_TOKEN_KEY);
 }
 
 function clearSession() {
@@ -33,11 +25,12 @@ function clearSession() {
   localStorage.removeItem('crm_impersonate_company_id');
 }
 
-async function refreshSession(refreshToken: string): Promise<{ token: string; refreshToken: string } | null> {
+async function refreshSession(_refreshToken?: string | null): Promise<{ ok?: boolean } | null> {
   const res = await fetch(`${BASE_URL}/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
+    credentials: 'same-origin',
+    body: JSON.stringify({}),
   });
 
   if (!res.ok) return null;
@@ -48,22 +41,18 @@ async function refreshSession(refreshToken: string): Promise<{ token: string; re
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}, allowRetry = true): Promise<T> {
-  const token = getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...((options.headers as Record<string, string>) || {}),
   };
 
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const res = await fetch(`${BASE_URL}${endpoint}`, { ...options, headers });
+  const res = await fetch(`${BASE_URL}${endpoint}`, { ...options, credentials: 'same-origin', headers });
 
   if (res.status === 401) {
     const canRefresh = allowRetry && endpoint !== '/auth/refresh' && !isImpersonating();
-    const refreshToken = getRefreshToken();
 
-    if (canRefresh && refreshToken) {
-      const refreshed = await refreshSession(refreshToken);
+    if (canRefresh) {
+      const refreshed = await refreshSession();
       if (refreshed) {
         return request<T>(endpoint, options, false);
       }
@@ -93,13 +82,13 @@ export const api = {
 
   // Auth
   login: (email: string, password: string) =>
-    request<{ user: any; token: string; refreshToken: string }>('/auth/login', {
+    request<{ user: any; token?: string; refreshToken?: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
 
   register: (data: { email: string; password: string; name: string; role?: string }) =>
-    request<{ user: any; token: string }>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+    request<{ user: any; token?: string }>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
 
   getMe: () => request<any>('/auth/me'),
 
@@ -253,7 +242,7 @@ export const api = {
 
   exportXlsx: () =>
     fetch(`${BASE_URL}/import-export/xlsx`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
+      credentials: 'same-origin',
     }).then((r) => r.blob()),
 
   importJson: (leads: any[]) =>
@@ -334,8 +323,11 @@ export const api = {
     request<any>(`/super-admin/companies/${companyId}/users/${userId}`, { method: 'DELETE' }),
 
   impersonateCompany: (companyId: string) =>
-    request<{ token: string; company: { id: string; name: string; slug: string } }>(
+    request<{ token?: string; company: { id: string; name: string; slug: string } }>(
       `/super-admin/impersonate/${companyId}`,
       { method: 'POST' }
     ),
+
+  exitImpersonation: () =>
+    request<{ ok: boolean }>('/super-admin/exit-impersonation', { method: 'POST' }),
 };

@@ -1,18 +1,27 @@
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 export async function ensureSuperAdmin(prisma: PrismaClient) {
-  // Verifica se já existe algum SUPER_ADMIN
   const existing = await prisma.user.findFirst({
     where: { role: 'SUPER_ADMIN' },
   });
 
   if (existing) return;
 
-  // Cria o primeiro SUPER_ADMIN com variáveis de ambiente ou valores padrão
-  const email = process.env.SUPER_ADMIN_EMAIL || 'super@crm.com';
-  const password = process.env.SUPER_ADMIN_PASSWORD || 'SuperAdmin1';
+  const email = process.env.SUPER_ADMIN_EMAIL;
+  const password = process.env.SUPER_ADMIN_PASSWORD;
   const name = process.env.SUPER_ADMIN_NAME || 'Super Admin';
+
+  if (!email || !password) {
+    console.warn('SUPER_ADMIN nao existe e SUPER_ADMIN_EMAIL/SUPER_ADMIN_PASSWORD nao definidas. Nenhum super admin criado.');
+    console.warn('Defina as variaveis de ambiente ou use: npm run create-super-admin');
+    return;
+  }
+
+  if (password.length < 8) {
+    console.error('SUPER_ADMIN_PASSWORD deve ter no minimo 8 caracteres.');
+    return;
+  }
 
   const hashedPassword = await bcrypt.hash(password, 12);
 

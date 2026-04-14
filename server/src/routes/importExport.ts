@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { LeadStatus, PrismaClient } from '@prisma/client';
-import * as XLSX from 'xlsx';
+import { LeadStatus } from '@prisma/client';
+import ExcelJS from 'exceljs';
 import { authenticate, authorize } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import {
@@ -12,9 +12,9 @@ import {
   resolveStageForLead,
 } from '../utils/pipeline';
 import { companyWhere, getCompanyIdFromRequest } from '../utils/tenancy';
+import { prisma } from '../utils/prisma';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const DEFAULT_STAGE_COLOR = '#6366f1';
 const DEFAULT_TAG_COLOR = '#6366f1';
@@ -25,6 +25,8 @@ function normalizeLookup(value?: string | null) {
   return String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200d\u2060\ufeff]/g, '')
+    .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
 }
@@ -68,14 +70,79 @@ function parseOptionalDate(value: unknown) {
   }
 
   if (typeof value === 'number') {
-    const date = XLSX.SSF.parse_date_code(value);
-    if (date) {
-      return new Date(Date.UTC(date.y, date.m - 1, date.d, date.H || 0, date.M || 0, date.S || 0));
-    }
+    const excelEpoch = Date.UTC(1899, 11, 30);
+    return new Date(excelEpoch + value * 24 * 60 * 60 * 1000);
   }
 
   const parsed = new Date(String(value));
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function normalizeExcelCellValue(value: ExcelJS.CellValue) {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value;
+  if (typeof value !== 'object') return value;
+
+  if ('text' in value && typeof value.text === 'string') return value.text;
+  if ('hyperlink' in value && typeof value.hyperlink === 'string') return value.hyperlink;
+  if ('result' in value) return value.result ?? null;
+  if ('richText' in value && Array.isArray(value.richText)) {
+    return value.richText.map((part) => part.text).join('');
+  }
+
+  return String(value);
+}
+
+async function readRowsFromXlsxBuffer(buffer: Buffer) {
+  const workbook = new ExcelJS.Workbook();
+  const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+  await workbook.xlsx.load(arrayBuffer);
+
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) return [];
+
+  const headers: string[] = [];
+  worksheet.getRow(1).eachCell((cell, columnNumber) => {
+    headers[columnNumber] = String(normalizeExcelCellValue(cell.value) || '').trim();
+  });
+
+  const rows: Record<string, unknown>[] = [];
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+
+    const item: Record<string, unknown> = {};
+    let hasValue = false;
+    for (let columnNumber = 1; columnNumber < headers.length; columnNumber += 1) {
+      const header = headers[columnNumber];
+      if (!header) continue;
+
+      const value = normalizeExcelCellValue(row.getCell(columnNumber).value);
+      if (value !== null && value !== undefined && value !== '') hasValue = true;
+      item[header] = value;
+    }
+
+    if (hasValue) rows.push(item);
+  });
+
+  return rows;
+}
+
+async function writeRowsToXlsxBuffer(rows: Record<string, unknown>[]) {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Leads');
+  const headers = rows.length ? Object.keys(rows[0]) : ['Nome'];
+
+  worksheet.columns = headers.map((header) => ({
+    header,
+    key: header,
+    width: Math.max(12, Math.min(30, header.length + 4)),
+  }));
+
+  rows.forEach((row) => worksheet.addRow(row));
+  worksheet.getRow(1).font = { bold: true };
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
 }
 
 function extractTagNames(value: unknown) {
@@ -131,20 +198,10 @@ function resolveOwnerId(
   const requestedOwner = readText(ownerValue);
   if (!requestedOwner) return fallbackUserId;
 
-  const normalizedOwner = normalizeLookup(requestedOwner);
-  const exactEmail = users.find((user) => normalizeLookup(user.email) === normalizedOwner);
-  if (exactEmail) return exactEmail.id;
+  const matchedUser = findOwnerUser(users, requestedOwner);
+  if (matchedUser) return matchedUser.id;
 
-  const emailLocalPart = users.find((user) => normalizeLookup(user.email.split('@')[0]) === normalizedOwner);
-  if (emailLocalPart) return emailLocalPart.id;
-
-  const exactName = users.find((user) => normalizeLookup(user.name) === normalizedOwner);
-  if (exactName) return exactName.id;
-
-  const partialName = users.find((user) => normalizeLookup(user.name).includes(normalizedOwner));
-  if (partialName) return partialName.id;
-
-  throw new Error(`Linha ${rowNumber}: owner "${requestedOwner}" nao corresponde a nenhum usuario do sistema.`);
+  throw new Error(`Linha ${rowNumber}: Responsavel nao encontrado na empresa atual: ${requestedOwner}`);
 }
 
 function resolveOwnerMatch(
@@ -159,31 +216,40 @@ function resolveOwnerMatch(
     };
   }
 
-  const normalizedOwner = normalizeLookup(requestedOwner);
-  const exactEmail = users.find((user) => normalizeLookup(user.email) === normalizedOwner);
-  if (exactEmail) {
-    return { requestedOwner, matchedUser: exactEmail };
-  }
-
-  const emailLocalPart = users.find((user) => normalizeLookup(user.email.split('@')[0]) === normalizedOwner);
-  if (emailLocalPart) {
-    return { requestedOwner, matchedUser: emailLocalPart };
-  }
-
-  const exactName = users.find((user) => normalizeLookup(user.name) === normalizedOwner);
-  if (exactName) {
-    return { requestedOwner, matchedUser: exactName };
-  }
-
-  const partialName = users.find((user) => normalizeLookup(user.name).includes(normalizedOwner));
-  if (partialName) {
-    return { requestedOwner, matchedUser: partialName };
+  const matchedUser = findOwnerUser(users, requestedOwner);
+  if (matchedUser) {
+    return { requestedOwner, matchedUser };
   }
 
   return {
     requestedOwner,
     matchedUser: null,
   };
+}
+
+function findOwnerUser(
+  users: Array<{ id: string; name: string; email: string }>,
+  requestedOwner: string,
+) {
+  const normalizedOwner = normalizeLookup(requestedOwner);
+  if (!normalizedOwner) return null;
+
+  const exactEmail = users.find((user) => normalizeLookup(user.email) === normalizedOwner);
+  if (exactEmail) return exactEmail;
+
+  const emailLocalPart = users.find((user) => normalizeLookup(user.email.split('@')[0]) === normalizedOwner);
+  if (emailLocalPart) return emailLocalPart;
+
+  const exactName = users.find((user) => normalizeLookup(user.name) === normalizedOwner);
+  if (exactName) return exactName;
+
+  const partialNameMatches = users.filter((user) => {
+    const normalizedName = normalizeLookup(user.name);
+    return normalizedName
+      && (normalizedName.includes(normalizedOwner) || normalizedOwner.includes(normalizedName));
+  });
+
+  return partialNameMatches.length === 1 ? partialNameMatches[0] : null;
 }
 
 async function ensureStage(
@@ -539,10 +605,7 @@ router.get('/xlsx', async (req: Request, res: Response) => {
       'Criado em': lead.createdAt.toISOString().split('T')[0],
     }));
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data);
-    XLSX.utils.book_append_sheet(wb, ws, 'Leads');
-    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buffer = await writeRowsToXlsxBuffer(data);
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=leads.xlsx');
@@ -595,9 +658,7 @@ router.post('/preview/xlsx', authorize('ADMIN', 'MANAGER'), async (req: Request,
     }
 
     const buffer = Buffer.from(data, 'base64');
-    const workbook = XLSX.read(buffer, { cellDates: true });
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: null });
+    const rows = await readRowsFromXlsxBuffer(buffer);
 
     const preview = await buildImportPreview(rows, req.user!.userId, 'xlsx');
     res.json(preview);
@@ -616,9 +677,7 @@ router.post('/xlsx', authorize('ADMIN', 'MANAGER'), async (req: Request, res: Re
     }
 
     const buffer = Buffer.from(data, 'base64');
-    const workbook = XLSX.read(buffer, { cellDates: true });
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: null });
+    const rows = await readRowsFromXlsxBuffer(buffer);
 
     const imported = await importLeadRows(rows, req.user!.userId, 'xlsx');
     res.json({ message: `${imported} leads importados com sucesso` });

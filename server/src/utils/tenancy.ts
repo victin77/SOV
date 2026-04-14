@@ -54,13 +54,14 @@ export async function ensureDefaultCompanyAndBackfill(prisma: PrismaClient) {
 export async function resolveCaptureCompany(prisma: PrismaClient, companySlug?: string | null) {
   const normalizedSlug = companySlug ? slugify(companySlug) : null;
 
+  if (!normalizedSlug) {
+    return null;
+  }
+
   if (normalizedSlug) {
-    const company = await prisma.company.findUnique({ where: { slug: normalizedSlug } });
+    const company = await prisma.company.findFirst({ where: { slug: normalizedSlug, active: true } });
     if (company) return company;
   }
 
-  const firstCompany = await prisma.company.findFirst({ orderBy: { createdAt: 'asc' } });
-  if (firstCompany) return firstCompany;
-
-  return ensureDefaultCompanyAndBackfill(prisma);
+  return null;
 }

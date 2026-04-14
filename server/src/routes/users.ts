@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../utils/prisma';
 import bcrypt from 'bcryptjs';
 import { authenticate, authorize } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
@@ -8,7 +8,6 @@ import { companyWhere, getCompanyIdFromRequest } from '../utils/tenancy';
 import { createUserSchema, updateUserSchema, validateBody } from '../utils/validation';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(authenticate);
 
@@ -102,10 +101,10 @@ router.put('/:id', authorize('ADMIN'), async (req: Request, res: Response) => {
 
     const scopedUser = await prisma.user.findFirst({
       where: { id: userId, ...companyWhere(req) },
-      select: { id: true },
+      select: { id: true, role: true, companyId: true },
     });
     if (!scopedUser) {
-      res.status(404).json({ error: 'UsuÃ¡rio nÃ£o encontrado' });
+      res.status(404).json({ error: 'Usuario nao encontrado' });
       return;
     }
 
@@ -115,6 +114,20 @@ router.put('/:id', authorize('ADMIN'), async (req: Request, res: Response) => {
       return;
     }
     const { name, email, role, phone, whatsappNumber, active, password } = parsed.data;
+
+    if (
+      scopedUser.role === 'ADMIN'
+      && scopedUser.companyId
+      && ((role !== undefined && role !== 'ADMIN') || active === false)
+    ) {
+      const adminCount = await prisma.user.count({
+        where: { companyId: scopedUser.companyId, role: 'ADMIN', active: true },
+      });
+      if (adminCount <= 1) {
+        res.status(400).json({ error: 'Nao e possivel remover o unico administrador ativo da empresa' });
+        return;
+      }
+    }
 
     const data: Record<string, unknown> = {};
     if (name !== undefined) data.name = name;
@@ -171,22 +184,44 @@ router.delete('/:id', authorize('ADMIN'), async (req: Request, res: Response) =>
 
     const scopedUser = await prisma.user.findFirst({
       where: { id: userId, ...companyWhere(req) },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, role: true, companyId: true },
     });
     if (!scopedUser) {
-      res.status(404).json({ error: 'Usuário não encontrado' });
+      res.status(404).json({ error: 'Usuario nao encontrado' });
       return;
     }
 
-    // Limpar relações antes de excluir
+    // Proteger contra deletar ultimo ADMIN da empresa
+    if (scopedUser.role === 'ADMIN' && scopedUser.companyId) {
+      const adminCount = await prisma.user.count({
+        where: { companyId: scopedUser.companyId, role: 'ADMIN', active: true },
+      });
+      if (adminCount <= 1) {
+        res.status(400).json({ error: 'Nao e possivel excluir o unico administrador da empresa' });
+        return;
+      }
+    }
+
+    // Limpar relacoes antes de excluir
     await prisma.lead.updateMany({ where: { assignedToId: userId }, data: { assignedToId: null } });
     await prisma.appointment.deleteMany({ where: { userId } });
     await prisma.notification.deleteMany({ where: { userId } });
-    await prisma.auditLog.deleteMany({ where: { userId } });
 
+    // Audit log ANTES de deletar os logs do usuario
+    await logAudit({
+      userId: req.user!.userId,
+      companyId: req.user!.companyId,
+      action: 'DELETE_USER',
+      entity: 'user',
+      entityId: userId,
+      details: { name: scopedUser.name, email: scopedUser.email, role: scopedUser.role },
+    });
+
+    await prisma.auditLog.deleteMany({ where: { userId } });
+    await prisma.refreshToken.deleteMany({ where: { userId } });
     await prisma.user.delete({ where: { id: userId } });
 
-    res.json({ message: 'Usuário excluído permanentemente' });
+    res.json({ message: 'Usuario excluido permanentemente' });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao excluir usuário' });
   }

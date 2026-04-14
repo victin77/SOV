@@ -1,13 +1,22 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client';
-import { generateToken, generateRefreshToken, rotateRefreshToken, revokeUserRefreshTokens, authenticate, authorize } from '../middleware/auth';
+import { prisma } from '../utils/prisma';
+import {
+  clearAuthCookies,
+  generateToken,
+  generateRefreshToken,
+  getRefreshTokenFromRequest,
+  rotateRefreshToken,
+  revokeUserRefreshTokens,
+  setAuthCookies,
+  authenticate,
+  authorize,
+} from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import { firstString } from '../utils/request';
-import { loginSchema, registerSchema, changePasswordSchema, validateBody } from '../utils/validation';
+import { loginSchema, registerSchema, changePasswordSchema, updateProfileSchema, validateBody } from '../utils/validation';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const userSelect = {
   id: true,
@@ -38,6 +47,12 @@ router.post('/register', authenticate, authorize('ADMIN', 'MANAGER', 'SUPER_ADMI
     }
     const { email, password, name, role, phone, whatsappNumber } = parsed.data;
 
+    // MANAGER cannot create ADMIN users
+    if (req.user!.role === 'MANAGER' && role === 'ADMIN') {
+      res.status(403).json({ error: 'Gerente nao pode criar usuarios administradores' });
+      return;
+    }
+
     // Use the company of the authenticated user (admin creating the new user)
     const creatorCompanyId = req.user!.companyId;
     if (!creatorCompanyId) {
@@ -66,22 +81,15 @@ router.post('/register', authenticate, authorize('ADMIN', 'MANAGER', 'SUPER_ADMI
       select: userSelect,
     });
 
-    const token = generateToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      companyId: user.companyId,
-    });
-
     await logAudit({
-      userId: user.id,
+      userId: req.user!.userId,
       companyId: user.companyId,
       action: 'REGISTER',
       entity: 'user',
       entityId: user.id,
     });
 
-    res.status(201).json({ user, token });
+    res.status(201).json({ user });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao registrar' });
@@ -132,6 +140,7 @@ router.post('/login', async (req: Request, res: Response) => {
     });
 
     const refreshToken = await generateRefreshToken(freshUser.id);
+    setAuthCookies(res, token, refreshToken);
 
     await logAudit({
       userId: user.id,
@@ -144,8 +153,6 @@ router.post('/login', async (req: Request, res: Response) => {
 
     res.json({
       user: freshUser,
-      token,
-      refreshToken,
     });
   } catch (err) {
     console.error(err);
@@ -172,10 +179,22 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
 
 router.put('/profile', authenticate, async (req: Request, res: Response) => {
   try {
-    const { name, phone, avatar, whatsappNumber } = req.body;
+    const parsed = validateBody(updateProfileSchema, req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+    const { name, phone, avatar, whatsappNumber } = parsed.data;
+
+    const data: Record<string, unknown> = { lastSeenAt: new Date() };
+    if (name !== undefined) data.name = name;
+    if (phone !== undefined) data.phone = phone;
+    if (avatar !== undefined) data.avatar = avatar;
+    if (whatsappNumber !== undefined) data.whatsappNumber = whatsappNumber;
+
     const user = await prisma.user.update({
       where: { id: req.user!.userId },
-      data: { name, phone, avatar, whatsappNumber, lastSeenAt: new Date() },
+      data,
       select: userSelect,
     });
     res.json(user);
@@ -237,7 +256,8 @@ router.put('/password', authenticate, async (req: Request, res: Response) => {
 
 router.post('/refresh', async (req: Request, res: Response) => {
   try {
-    const { refreshToken } = req.body as { refreshToken?: string };
+    const { refreshToken: bodyRefreshToken } = req.body as { refreshToken?: string };
+    const refreshToken = bodyRefreshToken || getRefreshTokenFromRequest(req);
     if (!refreshToken) {
       res.status(400).json({ error: 'Refresh token é obrigatório' });
       return;
@@ -245,13 +265,15 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
     const result = await rotateRefreshToken(refreshToken);
     if (!result) {
+      clearAuthCookies(res);
       res.status(401).json({ error: 'Refresh token inválido ou expirado' });
       return;
     }
 
+    setAuthCookies(res, result.accessToken, result.refreshToken);
+
     res.json({
-      token: result.accessToken,
-      refreshToken: result.refreshToken,
+      ok: true,
     });
   } catch (err) {
     console.error('POST /auth/refresh failed', err);
@@ -262,6 +284,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
 router.post('/logout', authenticate, async (req: Request, res: Response) => {
   try {
     await revokeUserRefreshTokens(req.user!.userId);
+    clearAuthCookies(res);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao fazer logout' });

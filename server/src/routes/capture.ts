@@ -1,40 +1,83 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../utils/prisma';
+import rateLimit from 'express-rate-limit';
 import { getNextPipelinePosition } from '../utils/pipeline';
+import { resolveCaptureCompany } from '../utils/tenancy';
 
 const router = Router();
-const prisma = new PrismaClient();
+
+function escapeHtmlAttribute(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Rate limit agressivo para captura publica
+const captureLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: 'Muitas requisicoes. Tente novamente em instantes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Public endpoint - no auth required (for external forms/API)
-router.post('/lead', async (req: Request, res: Response) => {
+router.post('/lead', captureLimiter, async (req: Request, res: Response) => {
   try {
-    const { name, email, phone, company, source, notes, position } = req.body;
+    const { name, email, phone, company: companyName, source, notes, position, companySlug, website } = req.body;
 
-    if (!name) {
-      res.status(400).json({ error: 'Nome é obrigatório' });
+    if (website) {
+      res.status(400).json({ error: 'Requisicao invalida' });
       return;
     }
 
-    // Find first available stage
-    const firstStage = await prisma.pipelineStage.findFirst({ orderBy: { order: 'asc' } });
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      res.status(400).json({ error: 'Nome e obrigatorio' });
+      return;
+    }
+    if (name.length > 200 || (email && email.length > 200) || (phone && phone.length > 50) || (notes && notes.length > 2000)) {
+      res.status(400).json({ error: 'Campos excedem tamanho maximo permitido' });
+      return;
+    }
+
+    const resolvedCompany = await resolveCaptureCompany(prisma, companySlug);
+    if (!resolvedCompany) {
+      res.status(400).json({ error: 'companySlug valido e obrigatorio para capturar leads' });
+      return;
+    }
+    const companyId = resolvedCompany.id;
+
+    // Find first available stage DA EMPRESA
+    const firstStage = await prisma.pipelineStage.findFirst({
+      where: { companyId },
+      orderBy: { order: 'asc' },
+    });
     const pipelinePosition = await getNextPipelinePosition(prisma, firstStage?.id);
 
     const lead = await prisma.lead.create({
       data: {
-        name,
-        email: email || null,
-        phone: phone || null,
-        company: company || null,
-        position: position || null,
-        source: source || 'external-form',
-        notes: notes || null,
+        name: name.trim().slice(0, 200),
+        email: email ? String(email).trim().slice(0, 200) : null,
+        phone: phone ? String(phone).trim().slice(0, 50) : null,
+        company: companyName ? String(companyName).trim().slice(0, 200) : null,
+        position: position ? String(position).trim().slice(0, 100) : null,
+        source: source ? String(source).trim().slice(0, 100) : 'external-form',
+        notes: notes ? String(notes).trim().slice(0, 2000) : null,
         stageId: firstStage?.id,
         pipelinePosition,
+        companyId,
       },
     });
 
     await prisma.activity.create({
-      data: { type: 'CAPTURED', description: `Lead capturado via fonte externa: ${source || 'formulário'}`, leadId: lead.id },
+      data: {
+        type: 'CAPTURED',
+        description: `Lead capturado via fonte externa: ${source || 'formulario'}`,
+        leadId: lead.id,
+        companyId,
+      },
     });
 
     res.status(201).json({ message: 'Lead capturado com sucesso', id: lead.id });
@@ -45,7 +88,8 @@ router.post('/lead', async (req: Request, res: Response) => {
 });
 
 // Embeddable form HTML (public)
-router.get('/form', (_req: Request, res: Response) => {
+router.get('/form', (req: Request, res: Response) => {
+  const companySlug = typeof req.query.companySlug === 'string' ? req.query.companySlug : '';
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -65,6 +109,7 @@ router.get('/form', (_req: Request, res: Response) => {
     button:hover { background: #4f46e5; }
     .success { color: #059669; text-align: center; padding: 20px; font-weight: 500; }
     .error { color: #dc2626; font-size: 0.8rem; margin-bottom: 8px; }
+    .website-field { position: absolute; left: -9999px; opacity: 0; pointer-events: none; }
   </style>
 </head>
 <body>
@@ -81,7 +126,9 @@ router.get('/form', (_req: Request, res: Response) => {
       <input type="text" id="company" name="company">
       <label for="notes">Mensagem</label>
       <textarea id="notes" name="notes"></textarea>
+      <input class="website-field" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
       <input type="hidden" name="source" value="website-form">
+      <input type="hidden" name="companySlug" value="${escapeHtmlAttribute(companySlug)}">
       <button type="submit">Enviar</button>
     </form>
     <div id="result"></div>

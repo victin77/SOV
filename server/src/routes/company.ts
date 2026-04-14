@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../utils/prisma';
 import { authenticate, authorize } from '../middleware/auth';
 import { encryptSecret } from '../utils/secrets';
 import { logAudit } from '../utils/audit';
@@ -7,7 +7,6 @@ import { getCompanyIdFromRequest } from '../utils/tenancy';
 import { resolveCompanyWhatsAppConfig } from '../utils/companyWhatsApp';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(authenticate);
 
@@ -39,7 +38,7 @@ router.get('/current', async (req: Request, res: Response) => {
     ]);
 
     if (!company) {
-      res.status(404).json({ error: 'Empresa nÃ£o encontrada' });
+      res.status(404).json({ error: 'Empresa nao encontrada' });
       return;
     }
 
@@ -60,7 +59,7 @@ router.get('/current', async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Erro ao carregar configuraÃ§Ãµes da empresa' });
+    res.status(500).json({ error: 'Erro ao carregar configuracoes da empresa' });
   }
 });
 
@@ -71,7 +70,7 @@ router.put('/current', authorize('ADMIN', 'MANAGER'), async (req: Request, res: 
     const normalizedName = String(name || '').trim();
 
     if (!normalizedName) {
-      res.status(400).json({ error: 'Nome da empresa Ã© obrigatÃ³rio' });
+      res.status(400).json({ error: 'Nome da empresa e obrigatorio' });
       return;
     }
 
@@ -177,7 +176,7 @@ router.put('/current/whatsapp', authorize('ADMIN', 'MANAGER'), async (req: Reque
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Erro ao salvar integraÃ§Ã£o do WhatsApp' });
+    res.status(500).json({ error: 'Erro ao salvar integracao do WhatsApp' });
   }
 });
 

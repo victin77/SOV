@@ -1,11 +1,17 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client';
-import { authenticate, authorizeSuperAdmin, generateImpersonationToken } from '../middleware/auth';
+import { prisma } from '../utils/prisma';
+import {
+  authenticate,
+  authorizeSuperAdmin,
+  generateImpersonationToken,
+  generateToken,
+  getImpersonationCookieMaxAge,
+  setAuthCookies,
+} from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(authenticate);
 router.use(authorizeSuperAdmin());
@@ -126,6 +132,11 @@ router.post('/companies', async (req: Request, res: Response) => {
       return;
     }
 
+    if (adminPassword.length < 8 || !/[a-zA-Z]/.test(adminPassword) || !/[0-9]/.test(adminPassword)) {
+      res.status(400).json({ error: 'Senha deve ter no minimo 8 caracteres, com pelo menos 1 letra e 1 numero' });
+      return;
+    }
+
     const slug = slugify(name);
     const existingSlug = await prisma.company.findUnique({ where: { slug } });
     if (existingSlug) {
@@ -236,35 +247,7 @@ router.delete('/companies/:id', async (req: Request, res: Response) => {
       return;
     }
 
-    // Limpar todas as relações antes de excluir a empresa
-    // 1. Dados ligados a leads (cascateiam do lead, mas appointments tem userId obrigatório)
-    await prisma.appointment.deleteMany({ where: { companyId } });
-    await prisma.activity.deleteMany({ where: { companyId } });
-    await prisma.notification.deleteMany({ where: { companyId } });
-    await prisma.auditLog.deleteMany({ where: { companyId } });
-
-    // 2. Leads (LeadTag, LeadCustomField, Activity cascateiam automaticamente)
-    await prisma.lead.deleteMany({ where: { companyId } });
-
-    // 3. Tags e pipeline stages
-    await prisma.tag.deleteMany({ where: { companyId } });
-    await prisma.pipelineStage.deleteMany({ where: { companyId } });
-
-    // 4. Refresh tokens dos usuarios da empresa
-    const userIds = (await prisma.user.findMany({ where: { companyId }, select: { id: true } })).map(u => u.id);
-    if (userIds.length > 0) {
-      await prisma.refreshToken.deleteMany({ where: { userId: { in: userIds } } });
-    }
-
-    // 5. Usuarios da empresa
-    await prisma.user.deleteMany({ where: { companyId } });
-
-    // 6. WhatsApp config (cascade, mas por segurança)
-    await prisma.companyWhatsAppConfig.deleteMany({ where: { companyId } });
-
-    // 7. Finalmente, a empresa
-    await prisma.company.delete({ where: { id: companyId } });
-
+    // Gravar audit log ANTES de apagar os dados da empresa
     await logAudit({
       userId: req.user!.userId,
       action: 'DELETE_COMPANY',
@@ -273,7 +256,38 @@ router.delete('/companies/:id', async (req: Request, res: Response) => {
       details: { companyName: company.name, companySlug: company.slug },
     });
 
-    res.json({ message: 'Empresa excluída permanentemente' });
+    // Limpar todas as relacoes em transacao
+    await prisma.$transaction(async (tx) => {
+      // 1. Dados ligados a leads
+      await tx.appointment.deleteMany({ where: { companyId } });
+      await tx.activity.deleteMany({ where: { companyId } });
+      await tx.notification.deleteMany({ where: { companyId } });
+      await tx.auditLog.deleteMany({ where: { companyId } });
+
+      // 2. Leads (LeadTag, LeadCustomField cascateiam automaticamente)
+      await tx.lead.deleteMany({ where: { companyId } });
+
+      // 3. Tags e pipeline stages
+      await tx.tag.deleteMany({ where: { companyId } });
+      await tx.pipelineStage.deleteMany({ where: { companyId } });
+
+      // 4. Refresh tokens dos usuarios da empresa
+      const userIds = (await tx.user.findMany({ where: { companyId }, select: { id: true } })).map(u => u.id);
+      if (userIds.length > 0) {
+        await tx.refreshToken.deleteMany({ where: { userId: { in: userIds } } });
+      }
+
+      // 5. Usuarios da empresa
+      await tx.user.deleteMany({ where: { companyId } });
+
+      // 6. WhatsApp config
+      await tx.companyWhatsAppConfig.deleteMany({ where: { companyId } });
+
+      // 7. Finalmente, a empresa
+      await tx.company.delete({ where: { id: companyId } });
+    });
+
+    res.json({ message: 'Empresa excluida permanentemente' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao excluir empresa' });
@@ -396,6 +410,19 @@ router.put('/companies/:id/users/:userId', async (req: Request, res: Response) =
     if (active !== undefined) data.active = active;
     if (role && ['ADMIN', 'MANAGER', 'SELLER'].includes(role)) data.role = role;
 
+    if (
+      user.role === 'ADMIN'
+      && ((role && role !== 'ADMIN') || active === false)
+    ) {
+      const adminCount = await prisma.user.count({
+        where: { companyId, role: 'ADMIN', active: true },
+      });
+      if (adminCount <= 1) {
+        res.status(400).json({ error: 'Nao e possivel remover o unico administrador ativo da empresa' });
+        return;
+      }
+    }
+
     const updated = await prisma.user.update({
       where: { id: userId },
       data,
@@ -422,18 +449,22 @@ router.delete('/companies/:id/users/:userId', async (req: Request, res: Response
 
     const user = await prisma.user.findFirst({ where: { id: userId, companyId } });
     if (!user) {
-      res.status(404).json({ error: 'Usuário não encontrado nesta empresa' });
+      res.status(404).json({ error: 'Usuario nao encontrado nesta empresa' });
       return;
     }
 
-    // Limpar relações antes de excluir
-    await prisma.lead.updateMany({ where: { assignedToId: userId }, data: { assignedToId: null } });
-    await prisma.appointment.deleteMany({ where: { userId } });
-    await prisma.notification.deleteMany({ where: { userId } });
-    await prisma.auditLog.deleteMany({ where: { userId } });
+    // Proteger contra deletar ultimo ADMIN da empresa
+    if (user.role === 'ADMIN') {
+      const adminCount = await prisma.user.count({
+        where: { companyId, role: 'ADMIN', active: true },
+      });
+      if (adminCount <= 1) {
+        res.status(400).json({ error: 'Nao e possivel excluir o unico administrador da empresa' });
+        return;
+      }
+    }
 
-    await prisma.user.delete({ where: { id: userId } });
-
+    // Audit log ANTES de deletar os dados do usuario
     await logAudit({
       userId: req.user!.userId,
       action: 'DELETE_USER',
@@ -442,7 +473,16 @@ router.delete('/companies/:id/users/:userId', async (req: Request, res: Response
       details: { companyId, userName: user.name, userEmail: user.email },
     });
 
-    res.json({ message: 'Usuário excluído permanentemente' });
+    // Limpar relacoes antes de excluir
+    await prisma.lead.updateMany({ where: { assignedToId: userId }, data: { assignedToId: null } });
+    await prisma.appointment.deleteMany({ where: { userId } });
+    await prisma.notification.deleteMany({ where: { userId } });
+    await prisma.auditLog.deleteMany({ where: { userId } });
+    await prisma.refreshToken.deleteMany({ where: { userId } });
+
+    await prisma.user.delete({ where: { id: userId } });
+
+    res.json({ message: 'Usuario excluido permanentemente' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao excluir usuário' });
@@ -465,8 +505,9 @@ router.post('/impersonate/:companyId', async (req: Request, res: Response) => {
       role: 'SUPER_ADMIN',
       companyId: company.id,
       impersonating: true,
-      originalUserId: req.user!.originalUserId || req.user!.userId,
+      originalUserId: req.user!.userId,
     });
+    setAuthCookies(res, token, null, getImpersonationCookieMaxAge());
 
     await logAudit({
       userId: req.user!.userId,
@@ -477,7 +518,6 @@ router.post('/impersonate/:companyId', async (req: Request, res: Response) => {
     });
 
     res.json({
-      token,
       company: {
         id: company.id,
         name: company.name,
@@ -487,6 +527,30 @@ router.post('/impersonate/:companyId', async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao entrar na empresa' });
+  }
+});
+
+router.post('/exit-impersonation', async (req: Request, res: Response) => {
+  try {
+    const token = generateToken({
+      userId: req.user!.userId,
+      email: req.user!.email,
+      role: 'SUPER_ADMIN',
+      companyId: null,
+    });
+    setAuthCookies(res, token);
+
+    await logAudit({
+      userId: req.user!.userId,
+      action: 'EXIT_IMPERSONATION',
+      entity: 'user',
+      entityId: req.user!.userId,
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao sair da empresa' });
   }
 });
 

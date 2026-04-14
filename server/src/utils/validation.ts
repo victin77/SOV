@@ -6,6 +6,20 @@ const passwordSchema = z
   .regex(/[a-zA-Z]/, 'Senha deve conter pelo menos 1 letra')
   .regex(/[0-9]/, 'Senha deve conter pelo menos 1 número');
 
+const safeAvatarSchema = z
+  .string()
+  .max(500)
+  .refine((value) => {
+    if (!value) return true;
+    if (value.startsWith('/uploads/')) return true;
+    try {
+      const url = new URL(value);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }, 'Avatar deve ser uma URL http(s) ou caminho /uploads/');
+
 export const loginSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(1, 'Senha é obrigatória'),
@@ -37,6 +51,13 @@ export const updateUserSchema = z.object({
   whatsappNumber: z.string().max(30).optional().nullable(),
   active: z.boolean().optional(),
   password: passwordSchema.optional(),
+});
+
+export const updateProfileSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  phone: z.string().max(30).optional().nullable(),
+  avatar: safeAvatarSchema.optional().nullable(),
+  whatsappNumber: z.string().max(30).optional().nullable(),
 });
 
 export const changePasswordSchema = z.object({

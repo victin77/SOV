@@ -1,11 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../utils/prisma';
 import { authenticate } from '../middleware/auth';
 import { firstString } from '../utils/request';
 import { companyWhere, getCompanyIdFromRequest } from '../utils/tenancy';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(authenticate);
 
@@ -58,7 +57,7 @@ router.put('/:id/read', async (req: Request, res: Response) => {
 
     const notification = await prisma.notification.findFirst({ where: { id: notificationId, userId: req.user!.userId, ...companyWhere(req) }, select: { id: true } });
     if (!notification) {
-      res.status(404).json({ error: 'NotificaÃ§Ã£o nÃ£o encontrada' });
+      res.status(404).json({ error: 'Notificacao nao encontrada' });
       return;
     }
 

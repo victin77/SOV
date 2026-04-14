@@ -1,11 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { authenticate } from '../middleware/auth';
+import { prisma } from '../utils/prisma';
+import { authenticate, authorize } from '../middleware/auth';
 import { firstString } from '../utils/request';
 import { companyWhere, getCompanyIdFromRequest } from '../utils/tenancy';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(authenticate);
 
@@ -22,7 +21,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authorize('ADMIN', 'MANAGER'), async (req: Request, res: Response) => {
   try {
     const { name, color } = req.body;
     const tag = await prisma.tag.create({
@@ -42,7 +41,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', authorize('ADMIN', 'MANAGER'), async (req: Request, res: Response) => {
   try {
     const tagId = firstString(req.params.id);
     if (!tagId) {
@@ -53,7 +52,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     const { name, color } = req.body;
     const tagExists = await prisma.tag.findFirst({ where: { id: tagId, ...companyWhere(req) }, select: { id: true } });
     if (!tagExists) {
-      res.status(404).json({ error: 'Tag nÃ£o encontrada' });
+      res.status(404).json({ error: 'Tag nao encontrada' });
       return;
     }
 
@@ -64,7 +63,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', authorize('ADMIN', 'MANAGER'), async (req: Request, res: Response) => {
   try {
     const tagId = firstString(req.params.id);
     if (!tagId) {
@@ -74,7 +73,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     const tagExists = await prisma.tag.findFirst({ where: { id: tagId, ...companyWhere(req) }, select: { id: true } });
     if (!tagExists) {
-      res.status(404).json({ error: 'Tag nÃ£o encontrada' });
+      res.status(404).json({ error: 'Tag nao encontrada' });
       return;
     }
 

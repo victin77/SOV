@@ -1,6 +1,10 @@
 import crypto from 'crypto';
 
-const SECRET = process.env.APP_ENCRYPTION_SECRET || process.env.JWT_SECRET || 'crm-leads-local-encryption-secret';
+const SECRET = process.env.APP_ENCRYPTION_SECRET || process.env.JWT_SECRET;
+if (!SECRET) {
+  console.error('FATAL: APP_ENCRYPTION_SECRET ou JWT_SECRET deve estar definida para criptografia.');
+  process.exit(1);
+}
 const KEY = crypto.createHash('sha256').update(SECRET).digest();
 
 export function encryptSecret(value?: string | null) {

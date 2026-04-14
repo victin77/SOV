@@ -8,6 +8,10 @@ import { PageLoading } from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { isUserOnline } from '../utils/presence';
 
+function isStrongPassword(password: string) {
+  return password.length >= 8 && /[a-zA-Z]/.test(password) && /[0-9]/.test(password);
+}
+
 export default function UsersPage() {
   const { user: me } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
@@ -41,6 +45,10 @@ export default function UsersPage() {
 
   const handleSave = async () => {
     try {
+      if (form.password && !isStrongPassword(form.password)) {
+        alert('Senha deve ter no minimo 8 caracteres, com pelo menos 1 letra e 1 numero');
+        return;
+      }
       if (editing) {
         const data: any = { name: form.name, email: form.email, role: form.role, phone: form.phone || null, whatsappNumber: form.whatsappNumber || null };
         if (form.password) data.password = form.password;
@@ -59,15 +67,23 @@ export default function UsersPage() {
   const handleToggleActive = async (u: User) => {
     if (u.id === me?.id) { alert('Voce nao pode desativar sua propria conta'); return; }
     if (!confirm(u.active ? 'Desativar este usuario?' : 'Reativar este usuario?')) return;
-    await api.updateUser(u.id, { active: !u.active });
-    load();
+    try {
+      await api.updateUser(u.id, { active: !u.active });
+      load();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao alterar status do usuario');
+    }
   };
 
   const handleDelete = async (u: User) => {
     if (u.id === me?.id) { alert('Voce nao pode excluir sua propria conta'); return; }
     if (!confirm(`Excluir "${u.name}" permanentemente? Esta acao nao pode ser desfeita. Os leads atribuidos a este usuario serao desvinculados.`)) return;
-    await api.deleteUser(u.id);
-    load();
+    try {
+      await api.deleteUser(u.id);
+      load();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir usuario');
+    }
   };
 
   if (loading) return <PageLoading />;
@@ -82,6 +98,12 @@ export default function UsersPage() {
           </button>
         )}
       </div>
+
+      {!isAdmin && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Voce tem acesso somente para consultar usuarios. Alteracoes exigem perfil ADMIN.
+        </div>
+      )}
 
       {/* Desktop Table */}
       <div className="card overflow-hidden hidden md:block">
@@ -189,12 +211,12 @@ export default function UsersPage() {
           </div>
           <div>
             <label className="label">{editing ? 'Nova Senha (opcional)' : 'Senha *'}</label>
-            <input className="input" type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder={editing ? 'Deixe vazio para manter' : ''} />
+            <input className="input" type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder={editing ? 'Deixe vazio para manter' : 'Minimo 8 caracteres, 1 letra e 1 numero'} />
           </div>
           <div>
             <label className="label">Perfil</label>
             <select className="input" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
-              {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              {Object.entries(ROLE_LABELS).filter(([k]) => k !== 'SUPER_ADMIN').map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           <div>

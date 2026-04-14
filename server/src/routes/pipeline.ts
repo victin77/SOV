@@ -1,12 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../utils/prisma';
 import { authenticate, authorize } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import { firstString } from '../utils/request';
 import { companyWhere, getCompanyIdFromRequest } from '../utils/tenancy';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 function parseDateRange(from?: string | null, to?: string | null) {
   const createdAt: { gte?: Date; lte?: Date } = {};
@@ -99,7 +98,7 @@ router.put('/stages/:id', authorize('ADMIN', 'MANAGER'), async (req: Request, re
     const { name, color, order } = req.body;
     const scopedStage = await prisma.pipelineStage.findFirst({ where: { id: stageId, ...companyWhere(req) }, select: { id: true } });
     if (!scopedStage) {
-      res.status(404).json({ error: 'Etapa nÃ£o encontrada' });
+      res.status(404).json({ error: 'Etapa nao encontrada' });
       return;
     }
 
@@ -140,7 +139,7 @@ router.delete('/stages/:id', authorize('ADMIN', 'MANAGER'), async (req: Request,
     // Move leads to first stage or unassign
     const scopedStage = await prisma.pipelineStage.findFirst({ where: { id: stageId, ...companyWhere(req) }, select: { id: true } });
     if (!scopedStage) {
-      res.status(404).json({ error: 'Etapa nÃ£o encontrada' });
+      res.status(404).json({ error: 'Etapa nao encontrada' });
       return;
     }
 

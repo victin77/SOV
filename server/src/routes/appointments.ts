@@ -1,12 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../utils/prisma';
 import { authenticate } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import { firstString } from '../utils/request';
 import { companyWhere, getCompanyIdFromRequest } from '../utils/tenancy';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(authenticate);
 
@@ -53,6 +52,16 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const { title, description, startDate, endDate, location, leadId } = req.body;
     const companyId = getCompanyIdFromRequest(req);
+
+    const leadWhere: any = { id: leadId, companyId };
+    if (req.user!.role === 'SELLER') {
+      leadWhere.assignedToId = req.user!.userId;
+    }
+    const lead = await prisma.lead.findFirst({ where: leadWhere, select: { id: true } });
+    if (!lead) {
+      res.status(404).json({ error: 'Lead nao encontrado para esta empresa' });
+      return;
+    }
 
     const appointment = await prisma.appointment.create({
       data: {
@@ -113,8 +122,12 @@ router.put('/:id', async (req: Request, res: Response) => {
       return;
     }
 
+    const appointmentWhere: any = { id: appointmentId, ...companyWhere(req) };
+    if (req.user!.role === 'SELLER') {
+      appointmentWhere.userId = req.user!.userId;
+    }
     const existingAppointment = await prisma.appointment.findFirst({
-      where: { id: appointmentId, ...companyWhere(req) },
+      where: appointmentWhere,
       select: { id: true, companyId: true },
     });
     if (!existingAppointment) {
@@ -157,8 +170,12 @@ router.delete('/:id', async (req: Request, res: Response) => {
       return;
     }
 
+    const deleteWhere: any = { id: appointmentId, ...companyWhere(req) };
+    if (req.user!.role === 'SELLER') {
+      deleteWhere.userId = req.user!.userId;
+    }
     const appointment = await prisma.appointment.findFirst({
-      where: { id: appointmentId, ...companyWhere(req) },
+      where: deleteWhere,
       select: { id: true, companyId: true },
     });
     if (!appointment) {

@@ -1,13 +1,23 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
+
+function getSeedPassword(envName: string) {
+  const configured = process.env[envName];
+  if (configured) return configured;
+  return `Seed-${crypto.randomBytes(8).toString('hex')}1`;
+}
 
 async function main() {
   console.log('Seeding database...');
 
   // Create admin user
-  const adminPassword = await bcrypt.hash('admin123', 12);
+  const adminPlainPassword = getSeedPassword('SEED_ADMIN_PASSWORD');
+  const managerPlainPassword = getSeedPassword('SEED_MANAGER_PASSWORD');
+  const sellerPlainPassword = getSeedPassword('SEED_SELLER_PASSWORD');
+  const adminPassword = await bcrypt.hash(adminPlainPassword, 12);
   const admin = await prisma.user.upsert({
     where: { email: 'admin@crm.com' },
     update: {},
@@ -22,7 +32,7 @@ async function main() {
   console.log('Admin created:', admin.email);
 
   // Create manager
-  const managerPassword = await bcrypt.hash('manager123', 12);
+  const managerPassword = await bcrypt.hash(managerPlainPassword, 12);
   const manager = await prisma.user.upsert({
     where: { email: 'gerente@crm.com' },
     update: {},
@@ -37,7 +47,7 @@ async function main() {
   console.log('Manager created:', manager.email);
 
   // Create sellers
-  const sellerPassword = await bcrypt.hash('seller123', 12);
+  const sellerPassword = await bcrypt.hash(sellerPlainPassword, 12);
   const seller1 = await prisma.user.upsert({
     where: { email: 'ana@crm.com' },
     update: {},
@@ -156,10 +166,10 @@ async function main() {
   });
 
   console.log('\nSeed complete! Login credentials:');
-  console.log('  Admin:    admin@crm.com     / admin123');
-  console.log('  Gerente:  gerente@crm.com   / manager123');
-  console.log('  Vendedor: ana@crm.com       / seller123');
-  console.log('  Vendedor: bruno@crm.com     / seller123');
+  console.log(`  Admin:    admin@crm.com     / ${adminPlainPassword}`);
+  console.log(`  Gerente:  gerente@crm.com   / ${managerPlainPassword}`);
+  console.log(`  Vendedor: ana@crm.com       / ${sellerPlainPassword}`);
+  console.log(`  Vendedor: bruno@crm.com     / ${sellerPlainPassword}`);
 }
 
 main()

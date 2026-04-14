@@ -26,23 +26,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [impersonation, setImpersonation] = useState<ImpersonationState>({
-    active: !!localStorage.getItem('crm_original_token'),
+    active: !!localStorage.getItem('crm_impersonate_company_id'),
     companyName: localStorage.getItem('crm_impersonate_company_name'),
     companyId: localStorage.getItem('crm_impersonate_company_id'),
   });
 
   useEffect(() => {
-    const token = localStorage.getItem('crm_token');
-    if (token) {
-        api.getMe()
-          .then(setUser)
-          .catch(() => {
-            api.clearSession();
-          })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    api.getMe()
+      .then(setUser)
+      .catch(() => {
+        api.clearSession();
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -64,7 +59,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const { user: u, token, refreshToken } = await api.login(email, password);
     api.storeSession(token, refreshToken);
-    localStorage.setItem('crm_user', JSON.stringify(u));
     setUser(u);
   }, []);
 
@@ -81,23 +75,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateUser = useCallback((u: User) => {
     setUser(u);
-    localStorage.setItem('crm_user', JSON.stringify(u));
   }, []);
 
   const enterCompany = useCallback(async (companyId: string) => {
-    const currentToken = localStorage.getItem('crm_token')!;
-    const currentRefreshToken = localStorage.getItem('crm_refresh_token');
     const { token, company } = await api.impersonateCompany(companyId);
-
-    // Save original token before switching
-    if (!localStorage.getItem('crm_original_token')) {
-      localStorage.setItem('crm_original_token', currentToken);
-      if (currentRefreshToken) {
-        localStorage.setItem('crm_original_refresh_token', currentRefreshToken);
-      }
-    }
-
-    localStorage.setItem('crm_token', token);
+    api.storeSession(token);
     localStorage.setItem('crm_impersonate_company_name', company.name);
     localStorage.setItem('crm_impersonate_company_id', company.id);
 
@@ -109,16 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const exitCompany = useCallback(async () => {
-    const originalToken = localStorage.getItem('crm_original_token');
-    const originalRefreshToken = localStorage.getItem('crm_original_refresh_token');
-    if (!originalToken) return;
-
-    localStorage.setItem('crm_token', originalToken);
-    if (originalRefreshToken) {
-      localStorage.setItem('crm_refresh_token', originalRefreshToken);
-    }
-    localStorage.removeItem('crm_original_token');
-    localStorage.removeItem('crm_original_refresh_token');
+    await api.exitImpersonation();
     localStorage.removeItem('crm_impersonate_company_name');
     localStorage.removeItem('crm_impersonate_company_id');
 

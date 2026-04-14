@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../utils/prisma';
 import { authenticate } from '../middleware/auth';
 import { firstString } from '../utils/request';
 import { normalizePhoneNumber } from '../utils/whatsapp';
@@ -13,7 +13,6 @@ import {
 } from '../utils/companyWhatsApp';
 
 const router = Router();
-const prisma = new PrismaClient();
 const WHATSAPP_ACTIVITY_TYPES = ['WHATSAPP_SENT', 'WHATSAPP_RECEIVED'] as const;
 
 type RawBodyRequest = Request & { rawBody?: string };

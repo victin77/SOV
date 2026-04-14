@@ -1,8 +1,9 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import path from 'path';
 import rateLimit from 'express-rate-limit';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './utils/prisma';
 import authRoutes from './routes/auth';
 import leadRoutes from './routes/leads';
 import pipelineRoutes from './routes/pipeline';
@@ -21,13 +22,19 @@ import { ensureDefaultCompanyAndBackfill } from './utils/tenancy';
 import { ensureSuperAdmin } from './utils/bootstrap';
 
 const app = express();
-const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3001;
 
-// CORS: em produção, definir CORS_ORIGIN com o domínio do frontend (ex: https://meucrm.com)
+// Security headers
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// CORS: em producao, CORS_ORIGIN DEVE estar definido (ex: https://meucrm.com)
 const corsOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
   : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000'];
+
+if (!process.env.CORS_ORIGIN && process.env.NODE_ENV === 'production') {
+  throw new Error('CORS_ORIGIN deve estar definido em producao.');
+}
 app.use(cors({ origin: corsOrigins, credentials: true }));
 app.use(express.json({
   limit: '10mb',
@@ -77,7 +84,7 @@ app.use('/api/super-admin', superAdminRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok' });
 });
 
 // Em produção, servir o frontend buildado

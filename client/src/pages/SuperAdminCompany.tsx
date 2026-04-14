@@ -49,8 +49,12 @@ function CreateUserModal({ open, onClose, companyId, onCreated }: { open: boolea
       setError('Preencha todos os campos');
       return;
     }
-    if (password.length < 6) {
-      setError('Senha deve ter no minimo 6 caracteres');
+    if (password.length < 8) {
+      setError('Senha deve ter no minimo 8 caracteres');
+      return;
+    }
+    if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      setError('Senha deve conter pelo menos 1 letra e 1 numero');
       return;
     }
 

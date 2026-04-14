@@ -4,9 +4,14 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = process.env.SUPER_ADMIN_EMAIL || 'super@crm.com';
-  const password = process.env.SUPER_ADMIN_PASSWORD || 'SuperAdmin1';
+  const email = process.env.SUPER_ADMIN_EMAIL;
+  const password = process.env.SUPER_ADMIN_PASSWORD;
   const name = process.env.SUPER_ADMIN_NAME || 'Super Admin';
+
+  if (!email || !password) {
+    console.error('Defina SUPER_ADMIN_EMAIL e SUPER_ADMIN_PASSWORD antes de criar o super admin.');
+    process.exit(1);
+  }
 
   if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
     console.error('Senha deve ter no minimo 8 caracteres, com pelo menos 1 letra e 1 numero.');

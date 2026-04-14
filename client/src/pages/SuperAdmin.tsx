@@ -39,8 +39,12 @@ function CreateCompanyModal({ open, onClose, onCreated }: { open: boolean; onClo
       setError('Preencha todos os campos');
       return;
     }
-    if (adminPassword.length < 6) {
-      setError('Senha deve ter no minimo 6 caracteres');
+    if (adminPassword.length < 8) {
+      setError('Senha deve ter no minimo 8 caracteres');
+      return;
+    }
+    if (!/[a-zA-Z]/.test(adminPassword) || !/[0-9]/.test(adminPassword)) {
+      setError('Senha deve conter pelo menos 1 letra e 1 numero');
       return;
     }
 
@@ -103,7 +107,7 @@ function CreateCompanyModal({ open, onClose, onCreated }: { open: boolean; onClo
               </div>
               <div>
                 <label className="label">Senha</label>
-                <input className="input" type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Minimo 6 caracteres" />
+                <input className="input" type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Minimo 8 caracteres, 1 letra e 1 numero" />
               </div>
             </div>
           </div>

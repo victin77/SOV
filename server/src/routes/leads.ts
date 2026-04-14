@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { authenticate } from '../middleware/auth';
+import { prisma } from '../utils/prisma';
+import { authenticate, authorize } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import { firstString } from '../utils/request';
 import { getNextPipelinePosition, resolveStageForLead } from '../utils/pipeline';
@@ -8,7 +8,12 @@ import { sendLeadWhatsAppMessage } from '../utils/whatsappMessages';
 import { companyWhere, getCompanyIdFromRequest } from '../utils/tenancy';
 
 const router = Router();
-const prisma = new PrismaClient();
+
+function parseStringArray(value: unknown) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) return null;
+  return value.every((item) => typeof item === 'string') ? value : null;
+}
 
 function parseDateRange(from?: string | null, to?: string | null) {
   const createdAt: { gte?: Date; lte?: Date } = {};
@@ -111,8 +116,13 @@ router.get('/:id', async (req: Request, res: Response) => {
       return;
     }
 
+    const singleLeadWhere: any = { id: leadId, ...companyWhere(req) };
+    if (req.user!.role === 'SELLER') {
+      singleLeadWhere.assignedToId = req.user!.userId;
+    }
+
     const lead = await prisma.lead.findFirst({
-      where: { id: leadId, ...companyWhere(req) },
+      where: singleLeadWhere,
       include: {
         assignedTo: { select: { id: true, name: true, avatar: true, email: true } },
         stage: true,
@@ -140,6 +150,25 @@ router.post('/', async (req: Request, res: Response) => {
     const { name, email, phone, company, position, status, priority, value, source, notes, assignedToId, stageId, tags } = req.body;
 
     const companyId = getCompanyIdFromRequest(req);
+
+    // SELLER can only assign leads to themselves
+    let resolvedAssignedToId = assignedToId || req.user!.userId;
+    if (req.user!.role === 'SELLER') {
+      resolvedAssignedToId = req.user!.userId;
+    }
+
+    // Validate assignedToId belongs to same company
+    if (resolvedAssignedToId) {
+      const assignee = await prisma.user.findFirst({
+        where: { id: resolvedAssignedToId, companyId },
+        select: { id: true },
+      });
+      if (!assignee) {
+        res.status(400).json({ error: 'Usuario atribuido nao pertence a esta empresa' });
+        return;
+      }
+    }
+
     const stages = await prisma.pipelineStage.findMany({
       where: { companyId },
       orderBy: { order: 'asc' },
@@ -147,6 +176,22 @@ router.post('/', async (req: Request, res: Response) => {
     const resolvedStage = resolveStageForLead(stages, { stageId, status: status || 'NEW' });
     const resolvedStageId = resolvedStage?.id;
     const pipelinePosition = await getNextPipelinePosition(prisma, resolvedStageId);
+
+    const tagIds = parseStringArray(tags);
+    if (!tagIds) {
+      res.status(400).json({ error: 'Tags invalidas' });
+      return;
+    }
+
+    if (tagIds.length) {
+      const validTags = await prisma.tag.count({
+        where: { id: { in: tagIds }, companyId },
+      });
+      if (validTags !== tagIds.length) {
+        res.status(400).json({ error: 'Tags invalidas para esta empresa' });
+        return;
+      }
+    }
 
     const lead = await prisma.lead.create({
       data: {
@@ -161,7 +206,7 @@ router.post('/', async (req: Request, res: Response) => {
         source,
         notes,
         companyId,
-        assignedToId: assignedToId || req.user!.userId,
+        assignedToId: resolvedAssignedToId,
         stageId: resolvedStageId,
         pipelinePosition,
         wonDate: status === 'WON' ? new Date() : null,
@@ -174,10 +219,9 @@ router.post('/', async (req: Request, res: Response) => {
       },
     });
 
-    // Add tags
-    if (tags?.length) {
+    if (tagIds.length) {
       await prisma.leadTag.createMany({
-        data: tags.map((tagId: string) => ({ leadId: lead.id, tagId })),
+        data: tagIds.map((tagId) => ({ leadId: lead.id, tagId })),
       });
     }
 
@@ -206,9 +250,13 @@ router.put('/:id', async (req: Request, res: Response) => {
       return;
     }
 
-    const oldLead = await prisma.lead.findFirst({ where: { id: leadId, ...companyWhere(req) } });
+    const updateWhere: any = { id: leadId, ...companyWhere(req) };
+    if (req.user!.role === 'SELLER') {
+      updateWhere.assignedToId = req.user!.userId;
+    }
+    const oldLead = await prisma.lead.findFirst({ where: updateWhere });
     if (!oldLead) {
-      res.status(404).json({ error: 'Lead não encontrado' });
+      res.status(404).json({ error: 'Lead nao encontrado' });
       return;
     }
 
@@ -230,6 +278,22 @@ router.put('/:id', async (req: Request, res: Response) => {
     if (assignedToId !== undefined) data.assignedToId = assignedToId;
     if (lostReason !== undefined) data.lostReason = lostReason;
     if (score !== undefined) data.score = score;
+
+    if (req.user!.role === 'SELLER' && assignedToId !== undefined && assignedToId !== req.user!.userId) {
+      res.status(403).json({ error: 'Vendedor so pode atribuir leads a si mesmo' });
+      return;
+    }
+
+    if (assignedToId !== undefined && assignedToId !== null) {
+      const assignee = await prisma.user.findFirst({
+        where: { id: assignedToId, companyId: oldLead.companyId },
+        select: { id: true },
+      });
+      if (!assignee) {
+        res.status(400).json({ error: 'Usuario atribuido nao pertence a esta empresa' });
+        return;
+      }
+    }
 
     const targetStatus = status !== undefined ? status : oldLead.status;
     const resolvedStage = resolveStageForLead(stages, {
@@ -304,9 +368,13 @@ router.delete('/:id', async (req: Request, res: Response) => {
       return;
     }
 
-    const lead = await prisma.lead.findFirst({ where: { id: leadId, ...companyWhere(req) }, select: { id: true, companyId: true } });
+    const leadWhere: any = { id: leadId, ...companyWhere(req) };
+    if (req.user!.role === 'SELLER') {
+      leadWhere.assignedToId = req.user!.userId;
+    }
+    const lead = await prisma.lead.findFirst({ where: leadWhere, select: { id: true, companyId: true } });
     if (!lead) {
-      res.status(404).json({ error: 'Lead nÃ£o encontrado' });
+      res.status(404).json({ error: 'Lead nao encontrado' });
       return;
     }
 
@@ -327,21 +395,39 @@ router.put('/:id/tags', async (req: Request, res: Response) => {
       return;
     }
 
-    const { tagIds } = req.body;
-
-    const lead = await prisma.lead.findFirst({ where: { id: leadId, ...companyWhere(req) }, select: { id: true } });
-    if (!lead) {
-      res.status(404).json({ error: 'Lead nÃ£o encontrado' });
+    const tagIds = parseStringArray(req.body?.tagIds);
+    if (!tagIds) {
+      res.status(400).json({ error: 'Tags invalidas' });
       return;
+    }
+
+    const tagLeadWhere: any = { id: leadId, ...companyWhere(req) };
+    if (req.user!.role === 'SELLER') {
+      tagLeadWhere.assignedToId = req.user!.userId;
+    }
+    const lead = await prisma.lead.findFirst({ where: tagLeadWhere, select: { id: true, companyId: true } });
+    if (!lead) {
+      res.status(404).json({ error: 'Lead nao encontrado' });
+      return;
+    }
+
+    if (tagIds.length) {
+      const validTags = await prisma.tag.count({
+        where: { id: { in: tagIds }, companyId: lead.companyId },
+      });
+      if (validTags !== tagIds.length) {
+        res.status(400).json({ error: 'Tags invalidas para esta empresa' });
+        return;
+      }
     }
 
     // Remove existing tags
     await prisma.leadTag.deleteMany({ where: { leadId } });
 
     // Add new tags
-    if (tagIds?.length) {
+    if (tagIds.length) {
       await prisma.leadTag.createMany({
-        data: tagIds.map((tagId: string) => ({ leadId, tagId })),
+        data: tagIds.map((tagId) => ({ leadId, tagId })),
       });
     }
 
@@ -365,12 +451,16 @@ router.post('/:id/activities', async (req: Request, res: Response) => {
       return;
     }
 
+    const activityLeadWhere: any = { id: leadId, ...companyWhere(req) };
+    if (req.user!.role === 'SELLER') {
+      activityLeadWhere.assignedToId = req.user!.userId;
+    }
     const lead = await prisma.lead.findFirst({
-      where: { id: leadId, ...companyWhere(req) },
+      where: activityLeadWhere,
       select: { companyId: true },
     });
     if (!lead) {
-      res.status(404).json({ error: 'Lead nÃ£o encontrado' });
+      res.status(404).json({ error: 'Lead nao encontrado' });
       return;
     }
 
@@ -428,12 +518,62 @@ router.post('/:id/whatsapp', async (req: Request, res: Response) => {
   }
 });
 
-// Bulk update
-router.post('/bulk', async (req: Request, res: Response) => {
+// Bulk update - only ADMIN/MANAGER can bulk update
+router.post('/bulk', authorize('ADMIN', 'MANAGER'), async (req: Request, res: Response) => {
   try {
     const { ids, data } = req.body;
-    await prisma.lead.updateMany({ where: { id: { in: ids }, ...companyWhere(req) }, data });
-    await logAudit({ userId: req.user!.userId, companyId: req.user!.companyId, action: 'BULK_UPDATE_LEADS', entity: 'lead', details: { ids, data } });
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ error: 'IDs sao obrigatorios' });
+      return;
+    }
+    if (!ids.every((id) => typeof id === 'string')) {
+      res.status(400).json({ error: 'IDs invalidos' });
+      return;
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      res.status(400).json({ error: 'Dados de atualizacao invalidos' });
+      return;
+    }
+
+    // Whitelist allowed fields for bulk update
+    const allowedFields = ['status', 'priority', 'assignedToId', 'stageId', 'source'];
+    const safeData: Record<string, unknown> = {};
+    for (const key of allowedFields) {
+      if (data[key] !== undefined) safeData[key] = data[key];
+    }
+
+    if (Object.keys(safeData).length === 0) {
+      res.status(400).json({ error: 'Nenhum campo valido para atualizar' });
+      return;
+    }
+
+    const companyId = getCompanyIdFromRequest(req);
+
+    if (typeof safeData.assignedToId === 'string') {
+      const assignee = await prisma.user.findFirst({
+        where: { id: safeData.assignedToId, companyId },
+        select: { id: true },
+      });
+      if (!assignee) {
+        res.status(400).json({ error: 'Usuario atribuido nao pertence a esta empresa' });
+        return;
+      }
+    }
+
+    if (typeof safeData.stageId === 'string') {
+      const stage = await prisma.pipelineStage.findFirst({
+        where: { id: safeData.stageId, companyId },
+        select: { id: true },
+      });
+      if (!stage) {
+        res.status(400).json({ error: 'Etapa nao pertence a esta empresa' });
+        return;
+      }
+    }
+
+    await prisma.lead.updateMany({ where: { id: { in: ids }, ...companyWhere(req) }, data: safeData });
+    await logAudit({ userId: req.user!.userId, companyId: req.user!.companyId, action: 'BULK_UPDATE_LEADS', entity: 'lead', details: { ids, data: safeData } });
     res.json({ message: `${ids.length} leads atualizados` });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao atualizar leads' });
