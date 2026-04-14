@@ -27,14 +27,14 @@ const PORT = process.env.PORT || 3001;
 // Security headers
 app.use(helmet({ contentSecurityPolicy: false }));
 
-// CORS: em producao, CORS_ORIGIN DEVE estar definido (ex: https://meucrm.com)
+// CORS: use CORS_ORIGIN for separate frontend domains.
+// In production without CORS_ORIGIN, Railway serves frontend/backend from the same origin.
 const corsOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
-  : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000'];
+  ? process.env.CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean)
+  : process.env.NODE_ENV === 'production'
+    ? false
+    : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000'];
 
-if (!process.env.CORS_ORIGIN && process.env.NODE_ENV === 'production') {
-  throw new Error('CORS_ORIGIN deve estar definido em producao.');
-}
 app.use(cors({ origin: corsOrigins, credentials: true }));
 app.use(express.json({
   limit: '10mb',
