@@ -8,6 +8,7 @@ import { sendLeadWhatsAppMessage } from '../utils/whatsappMessages';
 import { companyWhere, getCompanyIdFromRequest } from '../utils/tenancy';
 
 const router = Router();
+const DELETE_ALL_LEADS_CONFIRMATION = 'APAGAR TODOS OS LEADS';
 
 function parseStringArray(value: unknown) {
   if (value === undefined || value === null) return [];
@@ -33,6 +34,41 @@ function parseDateRange(from?: string | null, to?: string | null) {
   }
 
   return Object.keys(createdAt).length ? createdAt : undefined;
+}
+
+async function deleteAllLeadsForCurrentCompany(req: Request, res: Response) {
+  const confirmation = firstString(req.body?.confirmation);
+  if (confirmation !== DELETE_ALL_LEADS_CONFIRMATION) {
+    res.status(400).json({ error: 'Confirmacao invalida para apagar todos os leads' });
+    return;
+  }
+
+  let companyId: string;
+  try {
+    companyId = getCompanyIdFromRequest(req);
+  } catch {
+    res.status(400).json({ error: 'Selecione uma empresa antes de apagar os leads' });
+    return;
+  }
+
+  const deletedCount = await prisma.$transaction(async (tx) => {
+    const count = await tx.lead.count({ where: { companyId } });
+    await tx.lead.deleteMany({ where: { companyId } });
+    return count;
+  });
+
+  await logAudit({
+    userId: req.user!.userId,
+    companyId,
+    action: 'DELETE_ALL_LEADS',
+    entity: 'lead',
+    details: { deletedCount },
+  });
+
+  res.json({
+    message: `${deletedCount} leads apagados com sucesso`,
+    deletedCount,
+  });
 }
 
 router.use(authenticate);
@@ -359,12 +395,40 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Delete all leads for the current company - only ADMIN/SUPER_ADMIN
+router.post('/delete-all', authorize('ADMIN'), async (req: Request, res: Response) => {
+  try {
+    await deleteAllLeadsForCurrentCompany(req, res);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao apagar todos os leads' });
+  }
+});
+
+// Delete all leads for the current company - only ADMIN/SUPER_ADMIN
+router.delete('/all', authorize('ADMIN'), async (req: Request, res: Response) => {
+  try {
+    await deleteAllLeadsForCurrentCompany(req, res);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao apagar todos os leads' });
+  }
+});
+
 // Delete lead
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const leadId = firstString(req.params.id);
     if (!leadId) {
       res.status(400).json({ error: 'Lead inválido' });
+      return;
+    }
+    if (leadId === 'all') {
+      if (req.user!.role !== 'ADMIN' && req.user!.role !== 'SUPER_ADMIN') {
+        res.status(403).json({ error: 'Acesso negado' });
+        return;
+      }
+      await deleteAllLeadsForCurrentCompany(req, res);
       return;
     }
 

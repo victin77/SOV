@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { User, Lock, Check, Moon, Sun, MessageCircle, BookOpen, Download } from 'lucide-react';
+import { User, Lock, Check, Moon, Sun, MessageCircle, BookOpen, Download, AlertTriangle, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { api } from '../api/client';
 import type { CompanySettingsResponse } from '../types';
 import { downloadUserGuide } from '../utils/userGuide';
 import { ROLE_LABELS } from '../types';
+
+const DELETE_ALL_LEADS_CONFIRMATION = 'APAGAR TODOS OS LEADS';
 
 export default function Settings() {
   const { user, updateUser } = useAuth();
@@ -22,6 +24,7 @@ export default function Settings() {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwResult, setPwResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const canManageCompany = user?.role === 'ADMIN' || user?.role === 'MANAGER' || user?.role === 'SUPER_ADMIN';
+  const canDeleteAllLeads = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const [companySettings, setCompanySettings] = useState<CompanySettingsResponse | null>(null);
   const [companyName, setCompanyName] = useState('');
   const [companySaving, setCompanySaving] = useState(false);
@@ -33,6 +36,10 @@ export default function Settings() {
   const [appSecret, setAppSecret] = useState('');
   const [whatsSaving, setWhatsSaving] = useState(false);
   const [companyResult, setCompanyResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [deleteStep, setDeleteStep] = useState(0);
+  const [deleteLeadsConfirmation, setDeleteLeadsConfirmation] = useState('');
+  const [deletingLeads, setDeletingLeads] = useState(false);
+  const [deleteLeadsResult, setDeleteLeadsResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   useEffect(() => {
     if (!canManageCompany) return;
@@ -134,6 +141,32 @@ export default function Settings() {
       setCompanyResult({ ok: false, msg: err.message });
     } finally {
       setWhatsSaving(false);
+    }
+  };
+
+  const cancelDeleteAllLeads = () => {
+    setDeleteStep(0);
+    setDeleteLeadsConfirmation('');
+    setDeleteLeadsResult(null);
+  };
+
+  const handleDeleteAllLeads = async () => {
+    if (deleteLeadsConfirmation !== DELETE_ALL_LEADS_CONFIRMATION) {
+      setDeleteLeadsResult({ ok: false, msg: 'Digite a frase de confirmacao exatamente como aparece.' });
+      return;
+    }
+
+    setDeletingLeads(true);
+    setDeleteLeadsResult(null);
+    try {
+      const result = await api.deleteAllLeads(deleteLeadsConfirmation);
+      setDeleteLeadsResult({ ok: true, msg: result.message });
+      setDeleteStep(0);
+      setDeleteLeadsConfirmation('');
+    } catch (err: any) {
+      setDeleteLeadsResult({ ok: false, msg: err.message });
+    } finally {
+      setDeletingLeads(false);
     }
   };
 
@@ -313,6 +346,102 @@ export default function Settings() {
               {whatsSaving ? 'Salvando integracao...' : 'Salvar integracao do WhatsApp'}
             </button>
           </div>
+        </div>
+      )}
+
+      {canDeleteAllLeads && (
+        <div className="card p-6 space-y-5 border-red-200 dark:border-red-500/30">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center dark:bg-red-500/15">
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-300" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900 dark:text-white">Zona de risco</h3>
+              <p className="text-sm text-gray-600 dark:text-slate-300 mt-1">
+                Apague todos os leads da empresa atual apenas quando tiver certeza. Essa acao tambem remove atividades,
+                agendamentos, tags vinculadas e campos personalizados dos leads.
+              </p>
+            </div>
+          </div>
+
+          {deleteLeadsResult && (
+            <div className={`p-3 rounded-lg text-sm ${deleteLeadsResult.ok ? 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-300' : 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300'}`}>
+              {deleteLeadsResult.msg}
+            </div>
+          )}
+
+          {deleteStep === 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteStep(1);
+                setDeleteLeadsResult(null);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-60"
+            >
+              <Trash2 className="w-4 h-4" /> Apagar todos os leads
+            </button>
+          )}
+
+          {deleteStep === 1 && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
+              <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                Primeira confirmacao: todos os leads da empresa atual serao apagados de forma permanente.
+              </p>
+              <p className="text-sm text-red-700 mt-2 dark:text-red-200/80">
+                Usuarios, empresa e configuracoes permanecem. Os leads e dados ligados a eles serao removidos.
+              </p>
+              <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteStep(2)}
+                  className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700"
+                >
+                  Entendo, continuar
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelDeleteAllLeads}
+                  className="px-4 py-2 rounded-lg border border-red-200 text-red-700 text-sm font-medium hover:bg-white dark:border-red-500/40 dark:text-red-200 dark:hover:bg-red-500/10"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {deleteStep === 2 && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
+              <label className="block text-sm font-medium text-red-800 dark:text-red-200">
+                Segunda confirmacao: digite {DELETE_ALL_LEADS_CONFIRMATION}
+              </label>
+              <input
+                className="input mt-2"
+                value={deleteLeadsConfirmation}
+                onChange={(e) => setDeleteLeadsConfirmation(e.target.value)}
+                disabled={deletingLeads}
+                placeholder={DELETE_ALL_LEADS_CONFIRMATION}
+              />
+              <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={handleDeleteAllLeads}
+                  disabled={deletingLeads || deleteLeadsConfirmation !== DELETE_ALL_LEADS_CONFIRMATION}
+                  className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {deletingLeads ? 'Apagando leads...' : 'Confirmar e apagar todos os leads'}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelDeleteAllLeads}
+                  disabled={deletingLeads}
+                  className="px-4 py-2 rounded-lg border border-red-200 text-red-700 text-sm font-medium hover:bg-white disabled:opacity-60 dark:border-red-500/40 dark:text-red-200 dark:hover:bg-red-500/10"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

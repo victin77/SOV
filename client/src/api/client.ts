@@ -4,6 +4,15 @@ const REFRESH_TOKEN_KEY = 'crm_refresh_token';
 const ORIGINAL_TOKEN_KEY = 'crm_original_token';
 const ORIGINAL_REFRESH_TOKEN_KEY = 'crm_original_refresh_token';
 
+export type ImportProgressEvent = {
+  type: 'progress' | 'complete' | 'error';
+  phase: 'preparing' | 'reading' | 'importing' | 'completed';
+  processedRows: number;
+  totalRows: number;
+  importedRows?: number;
+  message: string;
+};
+
 function isImpersonating(): boolean {
   return !!localStorage.getItem('crm_impersonate_company_id');
 }
@@ -79,6 +88,71 @@ async function request<T>(endpoint: string, options: RequestInit = {}, allowRetr
   return res.blob() as unknown as T;
 }
 
+async function requestImportXlsxWithProgress(
+  base64Data: string,
+  onProgress: (event: ImportProgressEvent) => void,
+): Promise<{ message: string }> {
+  const res = await fetch(`${BASE_URL}/import-export/xlsx/progress`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: base64Data }),
+  });
+
+  if (res.status === 401) {
+    clearSession();
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+    throw new Error('Nao autenticado');
+  }
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const error = new Error(data.error || `Erro ${res.status}`) as Error & { status?: number };
+    error.status = res.status;
+    throw error;
+  }
+
+  if (!res.body) {
+    throw new Error('Nao foi possivel acompanhar o progresso da importacao.');
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let pending = '';
+  let finalMessage = '';
+
+  const handleLine = (line: string) => {
+    if (!line.trim()) return;
+    const event = JSON.parse(line) as ImportProgressEvent;
+    if (event.type === 'error') {
+      throw new Error(event.message || 'Erro ao importar XLSX');
+    }
+    onProgress(event);
+    if (event.type === 'complete') {
+      finalMessage = event.message;
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    pending += decoder.decode(value || new Uint8Array(), { stream: !done });
+    const lines = pending.split('\n');
+    pending = lines.pop() || '';
+
+    for (const line of lines) {
+      handleLine(line);
+    }
+
+    if (done) break;
+  }
+
+  handleLine(pending);
+
+  return { message: finalMessage || 'Importacao concluida com sucesso' };
+}
+
 export const api = {
   storeSession,
   clearSession,
@@ -150,6 +224,22 @@ export const api = {
 
   deleteLead: (id: string) =>
     request<any>(`/leads/${id}`, { method: 'DELETE' }),
+
+  deleteAllLeads: async (confirmation: string) => {
+    const body = JSON.stringify({ confirmation });
+    try {
+      return await request<{ message: string; deletedCount: number }>('/leads/delete-all', {
+        method: 'POST',
+        body,
+      });
+    } catch (err: any) {
+      if (err?.status !== 404) throw err;
+      return request<{ message: string; deletedCount: number }>('/leads/all', {
+        method: 'DELETE',
+        body,
+      });
+    }
+  },
 
   updateLeadTags: (id: string, tagIds: string[]) =>
     request<any>(`/leads/${id}/tags`, { method: 'PUT', body: JSON.stringify({ tagIds }) }),
@@ -257,6 +347,8 @@ export const api = {
 
   importXlsx: (base64Data: string) =>
     request<any>('/import-export/xlsx', { method: 'POST', body: JSON.stringify({ data: base64Data }) }),
+
+  importXlsxWithProgress: requestImportXlsxWithProgress,
 
   previewImportXlsx: (base64Data: string) =>
     request<any>('/import-export/preview/xlsx', { method: 'POST', body: JSON.stringify({ data: base64Data }) }),

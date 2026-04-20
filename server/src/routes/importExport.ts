@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { LeadStatus } from '@prisma/client';
 import ExcelJS from 'exceljs';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { authenticate, authorize } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import {
@@ -20,6 +22,18 @@ const DEFAULT_STAGE_COLOR = '#6366f1';
 const DEFAULT_TAG_COLOR = '#6366f1';
 
 router.use(authenticate);
+
+type ImportProgressPhase = 'preparing' | 'reading' | 'importing' | 'completed';
+
+type ImportProgressUpdate = {
+  phase: ImportProgressPhase;
+  processedRows: number;
+  totalRows: number;
+  importedRows?: number;
+  message: string;
+};
+
+type ImportProgressReporter = (update: ImportProgressUpdate) => void | Promise<void>;
 
 function normalizeLookup(value?: string | null) {
   return String(value || '')
@@ -41,6 +55,29 @@ function readText(...values: unknown[]) {
   for (const value of values) {
     if (value === null || value === undefined) continue;
     const text = String(value).trim();
+    if (text) return text;
+  }
+
+  return null;
+}
+
+function normalizeHeaderLookup(value: string) {
+  return normalizeLookup(value).replace(/[^a-z0-9]/g, '');
+}
+
+function readTextByHeader(row: Record<string, unknown>, aliases: string[]) {
+  const valuesByHeader = new Map<string, unknown>();
+
+  for (const [header, value] of Object.entries(row)) {
+    const key = normalizeHeaderLookup(header);
+    if (key && !valuesByHeader.has(key)) {
+      valuesByHeader.set(key, value);
+    }
+  }
+
+  for (const alias of aliases) {
+    const value = valuesByHeader.get(normalizeHeaderLookup(alias));
+    const text = readText(value);
     if (text) return text;
   }
 
@@ -196,37 +233,50 @@ function buildStatusDates(status: LeadStatus, createdAt?: Date | null, updatedAt
 }
 
 function readOwner(row: Record<string, unknown>) {
-  return readText(
-    row.ownerEmail,
-    row.OwnerEmail,
-    row.owner_email,
-    row.assignedToEmail,
-    row.AssignedToEmail,
-    row.responsavelEmail,
-    row.ResponsavelEmail,
-    row.emailResponsavel,
-    row.EmailResponsavel,
-    row['EmailResponsavel'],
-    row['Email do responsavel'],
-    row['Email do respons\u00e1vel'],
-    row['E-mail do responsavel'],
-    row['E-mail do respons\u00e1vel'],
-    row.owner,
-    row.Owner,
-    row.responsavel,
-    row.Responsavel,
-    row['Responsavel'],
-    row['Respons\u00e1vel'],
-    row['respons\u00e1vel'],
-    row['ResponsÃ¡vel'],
-  );
+  const ownerEmail = readTextByHeader(row, [
+    'ownerEmail',
+    'owner email',
+    'owner_email',
+    'assignedToEmail',
+    'assigned to email',
+    'assigned_to_email',
+    'responsavelEmail',
+    'responsavel email',
+    'responsavel_email',
+    'responsável email',
+    'emailResponsavel',
+    'EmailResponsavel',
+    'email responsavel',
+    'email responsável',
+    'email do responsavel',
+    'email do responsável',
+    'e-mail do responsavel',
+    'e-mail do responsável',
+  ]);
+  if (ownerEmail) return ownerEmail;
+
+  return readTextByHeader(row, [
+    'owner',
+    'assignedTo',
+    'assigned to',
+    'assigned_to',
+    'responsavel',
+    'responsável',
+    'responsalvel',
+    'ResponsÃ¡vel',
+    'nome do responsavel',
+    'nome do responsável',
+    'responsavel owner',
+    'responsável owner',
+    'responsalvel owner',
+  ]);
 }
 
 function resolveOwnerId(
   users: Array<{ id: string; name: string; email: string }>,
   ownerValue: unknown,
-  fallbackUserId: string,
-  rowNumber: number,
+  fallbackUserId: string | null,
+  _rowNumber: number,
 ) {
   const requestedOwner = readText(ownerValue);
   if (!requestedOwner) return fallbackUserId;
@@ -234,7 +284,7 @@ function resolveOwnerId(
   const matchedUser = findOwnerUser(users, requestedOwner);
   if (matchedUser) return matchedUser.id;
 
-  throw new Error(`Linha ${rowNumber}: Responsavel nao encontrado na empresa atual: ${requestedOwner}`);
+  return fallbackUserId;
 }
 
 function resolveOwnerMatch(
@@ -267,23 +317,34 @@ export function findOwnerUser(
   const normalizedOwner = normalizeLookup(requestedOwner);
   if (!normalizedOwner) return null;
 
+  // 1. Exact email match
   const exactEmail = users.find((user) => normalizeLookup(user.email) === normalizedOwner);
   if (exactEmail) return exactEmail;
 
+  // 2. Email local part match
   const emailLocalPart = users.find((user) => normalizeLookup(user.email.split('@')[0]) === normalizedOwner);
   if (emailLocalPart) return emailLocalPart;
 
+  // 3. Exact name match
   const exactName = users.find((user) => normalizeLookup(user.name) === normalizedOwner);
   if (exactName) return exactName;
 
+  // 4. First name match (only if exactly one user has that first name)
+  const firstNameMatches = users.filter((user) => {
+    const firstName = normalizeLookup(user.name).split(' ')[0];
+    return firstName && firstName === normalizedOwner;
+  });
+  if (firstNameMatches.length === 1) return firstNameMatches[0];
+
+  // 5. Partial name contains
   const partialNameMatches = users.filter((user) => {
     const normalizedName = normalizeLookup(user.name);
     return normalizedName
       && (normalizedName.includes(normalizedOwner) || normalizedOwner.includes(normalizedName));
   });
-
   if (partialNameMatches.length === 1) return partialNameMatches[0];
 
+  // 6. Token-based name match
   const ownerTokens = new Set(getLookupTokens(requestedOwner));
   if (ownerTokens.size) {
     const tokenNameMatches = users.filter((user) => (
@@ -365,6 +426,83 @@ async function ensureTags(
   return tagIds;
 }
 
+function resolveStageForImport(
+  stages: Array<{ id: string; name: string; order: number; isDefault: boolean }>,
+  stageName: string | null,
+  status: LeadStatus,
+) {
+  if (stageName) {
+    const found = findStageByName(stages, stageName);
+    if (found) return found;
+  }
+  return resolveStageForLead(stages, { status });
+}
+
+function resolveTagIds(
+  tags: Array<{ id: string; name: string }>,
+  tagNames: string[],
+) {
+  const ids: string[] = [];
+  for (const tagName of tagNames) {
+    const key = normalizeLookup(tagName);
+    const tag = tags.find((t) => normalizeLookup(t.name) === key);
+    if (tag) ids.push(tag.id);
+  }
+  return ids;
+}
+
+function generateImportEmail(name: string, companySlug: string) {
+  const base = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '');
+  return `${base || 'user'}@${companySlug}.import`;
+}
+
+async function ensureOwner(
+  tx: any,
+  users: Array<{ id: string; name: string; email: string }>,
+  ownerValue: unknown,
+  fallbackUserId: string,
+  companyId: string,
+  companySlug: string,
+) {
+  const requestedOwner = readText(ownerValue);
+  if (!requestedOwner) return fallbackUserId;
+
+  const matchedUser = findOwnerUser(users, requestedOwner);
+  if (matchedUser) return matchedUser.id;
+
+  // Auto-create user as SELLER
+  let email = generateImportEmail(requestedOwner, companySlug);
+
+  // Ensure email uniqueness by appending random suffix if needed
+  const existingEmail = await tx.user.findUnique({ where: { email }, select: { id: true } });
+  if (existingEmail) {
+    const suffix = crypto.randomBytes(3).toString('hex');
+    email = generateImportEmail(`${requestedOwner}-${suffix}`, companySlug);
+  }
+
+  const randomPassword = crypto.randomBytes(16).toString('hex');
+  const hashedPassword = await bcrypt.hash(randomPassword, 12);
+
+  const newUser = await tx.user.create({
+    data: {
+      name: requestedOwner,
+      email,
+      password: hashedPassword,
+      role: 'SELLER',
+      companyId,
+    },
+    select: { id: true, name: true, email: true },
+  });
+
+  users.push(newUser);
+  return newUser.id;
+}
+
 export function mapRowToLeadInput(row: Record<string, unknown>) {
   const status = parseLeadStatus(
     readText(row.status, row.Status, row.situacao, row.Situacao),
@@ -402,45 +540,158 @@ export function mapRowToLeadInput(row: Record<string, unknown>) {
   };
 }
 
-async function importLeadRows(rows: Record<string, unknown>[], importingUserId: string, format: 'json' | 'xlsx') {
-  return prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({
-      where: { id: importingUserId },
-      select: { companyId: true },
-    });
-    if (!user?.companyId) {
-      throw new Error('Usuario sem empresa vinculada.');
+async function preCreateOwners(
+  rows: Record<string, unknown>[],
+  users: Array<{ id: string; name: string; email: string }>,
+  companyId: string,
+  companySlug: string,
+) {
+  const seen = new Set(users.map((u) => normalizeLookup(u.name)));
+
+  for (const row of rows) {
+    const leadInput = mapRowToLeadInput(row);
+    const requestedOwner = readText(leadInput.owner);
+    if (!requestedOwner) continue;
+
+    const matchedUser = findOwnerUser(users, requestedOwner);
+    if (matchedUser) continue;
+
+    const ownerKey = normalizeLookup(requestedOwner);
+    if (!ownerKey || seen.has(ownerKey)) continue;
+    seen.add(ownerKey);
+
+    let email = generateImportEmail(requestedOwner, companySlug);
+    const existingEmail = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (existingEmail) {
+      const suffix = crypto.randomBytes(3).toString('hex');
+      email = generateImportEmail(`${requestedOwner}-${suffix}`, companySlug);
     }
 
-    const stages = await tx.pipelineStage.findMany({
-      where: { companyId: user.companyId },
-      orderBy: { order: 'asc' },
-      select: { id: true, name: true, order: true, isDefault: true },
-    });
-    const stagePositions = await buildInitialStagePositionMap(tx as any, stages);
-    const users = await tx.user.findMany({
-      where: { companyId: user.companyId },
+    const randomPassword = crypto.randomBytes(16).toString('hex');
+    const hashedPassword = await bcrypt.hash(randomPassword, 12);
+
+    const newUser = await prisma.user.create({
+      data: { name: requestedOwner, email, password: hashedPassword, role: 'SELLER', companyId },
       select: { id: true, name: true, email: true },
     });
-    const tags = await tx.tag.findMany({
-      where: { companyId: user.companyId },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
-    });
 
-    let imported = 0;
+    users.push(newUser);
+  }
+}
 
-    for (let index = 0; index < rows.length; index += 1) {
-      const row = rows[index];
-      const rowNumber = index + 2;
-      const leadInput = mapRowToLeadInput(row);
-      const assignedToId = resolveOwnerId(users, leadInput.owner, importingUserId, rowNumber);
-      const stage = await ensureStage(tx, stages, stagePositions, leadInput.stageName, leadInput.status, user.companyId);
-      const tagIds = await ensureTags(tx, tags, leadInput.tags, user.companyId);
-      const { wonDate, lostDate } = buildStatusDates(leadInput.status, leadInput.createdAt, leadInput.updatedAt);
+async function preCreateStagesAndTags(
+  rows: Record<string, unknown>[],
+  stages: Array<{ id: string; name: string; order: number; isDefault: boolean }>,
+  tags: Array<{ id: string; name: string }>,
+  companyId: string,
+) {
+  const knownStageKeys = new Set(stages.map((s) => normalizeLookup(s.name)));
+  const knownTagKeys = new Set(tags.map((t) => normalizeLookup(t.name)));
 
-      const lead = await tx.lead.create({
-        data: {
+  for (const row of rows) {
+    const leadInput = mapRowToLeadInput(row);
+
+    if (leadInput.stageName) {
+      const stageKey = normalizeLookup(leadInput.stageName);
+      if (stageKey && !knownStageKeys.has(stageKey)) {
+        knownStageKeys.add(stageKey);
+        const nextOrder = stages.reduce((max, s) => Math.max(max, s.order), 0) + 1;
+        const created = await prisma.pipelineStage.create({
+          data: { name: leadInput.stageName, color: DEFAULT_STAGE_COLOR, order: nextOrder, companyId },
+          select: { id: true, name: true, order: true, isDefault: true },
+        });
+        stages.push(created);
+      }
+    }
+
+    for (const tagName of leadInput.tags) {
+      const tagKey = normalizeLookup(tagName);
+      if (!tagKey || knownTagKeys.has(tagKey)) continue;
+      knownTagKeys.add(tagKey);
+      const created = await prisma.tag.create({
+        data: { name: tagName, color: DEFAULT_TAG_COLOR, companyId },
+        select: { id: true, name: true },
+      });
+      tags.push(created);
+    }
+  }
+}
+
+const IMPORT_BATCH_SIZE = 200;
+
+async function importLeadRows(
+  rows: Record<string, unknown>[],
+  importingUserId: string,
+  targetCompanyId: string,
+  format: 'json' | 'xlsx',
+  onProgress?: ImportProgressReporter,
+) {
+  await onProgress?.({
+    phase: 'preparing',
+    processedRows: 0,
+    totalRows: rows.length,
+    message: 'Preparando dados da importacao...',
+  });
+
+  const company = await prisma.company.findUnique({
+    where: { id: targetCompanyId },
+    select: { slug: true, active: true },
+  });
+  if (!company || !company.active) {
+    throw new Error('Empresa nao encontrada.');
+  }
+
+  const users = await prisma.user.findMany({
+    where: { companyId: targetCompanyId },
+    select: { id: true, name: true, email: true },
+  });
+  const fallbackAssignedToId = users.some((user) => user.id === importingUserId) ? importingUserId : null;
+  const stages = await prisma.pipelineStage.findMany({
+    where: { companyId: targetCompanyId },
+    orderBy: { order: 'asc' },
+    select: { id: true, name: true, order: true, isDefault: true },
+  });
+  const tags = await prisma.tag.findMany({
+    where: { companyId: targetCompanyId },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+
+  // Pre-create all missing owners, stages and tags OUTSIDE transactions
+  await preCreateOwners(rows, users, targetCompanyId, company.slug);
+  await preCreateStagesAndTags(rows, stages, tags, targetCompanyId);
+
+  await onProgress?.({
+    phase: 'importing',
+    processedRows: 0,
+    totalRows: rows.length,
+    importedRows: 0,
+    message: 'Iniciando criacao dos leads...',
+  });
+
+  // Process leads in batches using createMany for speed
+  let totalImported = 0;
+
+  for (let offset = 0; offset < rows.length; offset += IMPORT_BATCH_SIZE) {
+    const batch = rows.slice(offset, offset + IMPORT_BATCH_SIZE);
+
+    const batchImported = await prisma.$transaction(async (tx) => {
+      const stagePositions = await buildInitialStagePositionMap(tx as any, stages);
+      const leadsData: any[] = [];
+      const tagLinks: Array<{ leadId: string; tagId: string }> = [];
+      const updatedAtEntries: Array<{ id: string; updatedAt: Date }> = [];
+
+      for (let index = 0; index < batch.length; index += 1) {
+        const row = batch[index];
+        const leadInput = mapRowToLeadInput(row);
+        const assignedToId = resolveOwnerId(users, leadInput.owner, fallbackAssignedToId, offset + index + 2);
+        const stage = resolveStageForImport(stages, leadInput.stageName, leadInput.status);
+        const tagIds = resolveTagIds(tags, leadInput.tags);
+        const { wonDate, lostDate } = buildStatusDates(leadInput.status, leadInput.createdAt, leadInput.updatedAt);
+        const leadId = crypto.randomBytes(12).toString('hex');
+
+        leadsData.push({
+          id: leadId,
           name: leadInput.name,
           email: leadInput.email,
           phone: leadInput.phone,
@@ -452,39 +703,65 @@ async function importLeadRows(rows: Record<string, unknown>[], importingUserId: 
           source: leadInput.source,
           notes: leadInput.notes,
           lostReason: leadInput.lostReason,
-          companyId: user.companyId,
+          companyId: targetCompanyId,
           assignedToId,
           stageId: stage?.id || null,
           pipelinePosition: reserveStagePosition(stagePositions, stage?.id),
           wonDate,
           lostDate,
           ...(leadInput.createdAt ? { createdAt: leadInput.createdAt } : {}),
-        },
-      });
-
-      if (leadInput.updatedAt) {
-        await tx.$executeRaw`UPDATE leads SET "updatedAt" = ${leadInput.updatedAt} WHERE id = ${lead.id}`;
-      }
-
-      if (tagIds.length) {
-        await tx.leadTag.createMany({
-          data: tagIds.map((tagId) => ({ leadId: lead.id, tagId })),
         });
+
+        for (const tagId of tagIds) {
+          tagLinks.push({ leadId, tagId });
+        }
+
+        if (leadInput.updatedAt) {
+          updatedAtEntries.push({ id: leadId, updatedAt: leadInput.updatedAt });
+        }
       }
 
-      imported += 1;
-    }
+      await tx.lead.createMany({ data: leadsData });
 
-    await logAudit({
-      userId: importingUserId,
-      companyId: user.companyId,
-      action: 'IMPORT_LEADS',
-      entity: 'lead',
-      details: { count: imported, format },
+      if (tagLinks.length) {
+        await tx.leadTag.createMany({ data: tagLinks });
+      }
+
+      for (const entry of updatedAtEntries) {
+        await tx.$executeRaw`UPDATE leads SET "updatedAt" = ${entry.updatedAt} WHERE id = ${entry.id}`;
+      }
+
+      return leadsData.length;
+    }, { timeout: 120000 });
+
+    totalImported += batchImported;
+
+    await onProgress?.({
+      phase: 'importing',
+      processedRows: Math.min(offset + batch.length, rows.length),
+      totalRows: rows.length,
+      importedRows: totalImported,
+      message: `${totalImported} de ${rows.length} leads importados`,
     });
+  }
 
-    return imported;
-  }, { timeout: 60000 });
+  await logAudit({
+    userId: importingUserId,
+    companyId: targetCompanyId,
+    action: 'IMPORT_LEADS',
+    entity: 'lead',
+    details: { count: totalImported, format },
+  });
+
+  await onProgress?.({
+    phase: 'completed',
+    processedRows: rows.length,
+    totalRows: rows.length,
+    importedRows: totalImported,
+    message: `${totalImported} leads importados com sucesso`,
+  });
+
+  return totalImported;
 }
 
 async function buildImportPreview(rows: Record<string, unknown>[], importingUserId: string, format: 'json' | 'xlsx') {
@@ -513,8 +790,10 @@ async function buildImportPreview(rows: Record<string, unknown>[], importingUser
 
   const knownStageKeys = new Set(stages.map((stage) => normalizeLookup(stage.name)));
   const knownTagKeys = new Set(tags.map((tag) => normalizeLookup(tag.name)));
+  const knownOwnerKeys = new Set(users.map((u) => normalizeLookup(u.name)));
   const newStages: string[] = [];
   const newTags: string[] = [];
+  const newOwners: string[] = [];
   const unknownOwners: Array<{ rowNumber: number; owner: string }> = [];
 
   const rowPreviews = rows.map((row, index) => {
@@ -542,8 +821,14 @@ async function buildImportPreview(rows: Record<string, unknown>[], importingUser
       tagsToCreate.push(tagName);
     }
 
+    let willCreateOwner = false;
     if (ownerMatch.requestedOwner && !ownerMatch.matchedUser) {
-      issues.push(`Owner nao encontrado: ${ownerMatch.requestedOwner}`);
+      const ownerKey = normalizeLookup(ownerMatch.requestedOwner);
+      if (ownerKey && !knownOwnerKeys.has(ownerKey)) {
+        knownOwnerKeys.add(ownerKey);
+        newOwners.push(ownerMatch.requestedOwner);
+      }
+      willCreateOwner = true;
       unknownOwners.push({ rowNumber, owner: ownerMatch.requestedOwner });
     }
 
@@ -559,6 +844,7 @@ async function buildImportPreview(rows: Record<string, unknown>[], importingUser
       createdAt: leadInput.createdAt?.toISOString() || null,
       updatedAt: leadInput.updatedAt?.toISOString() || null,
       willCreateStage,
+      willCreateOwner,
       tagsToCreate,
       issues,
     };
@@ -567,13 +853,19 @@ async function buildImportPreview(rows: Record<string, unknown>[], importingUser
   return {
     format,
     totalRows: rows.length,
-    validRows: rowPreviews.filter((row) => row.issues.length === 0).length,
-    canImport: unknownOwners.length === 0 && rows.length > 0,
+    validRows: rowPreviews.length,
+    canImport: rows.length > 0,
     newStages,
     newTags,
+    newOwners,
     unknownOwners,
     rows: rowPreviews,
   };
+}
+
+function writeImportProgress(res: Response, payload: Record<string, unknown>) {
+  if (res.writableEnded) return;
+  res.write(`${JSON.stringify(payload)}\n`);
 }
 
 // Export leads as JSON
@@ -686,7 +978,7 @@ router.post('/json', authorize('ADMIN', 'MANAGER'), async (req: Request, res: Re
       return;
     }
 
-    const imported = await importLeadRows(leads, req.user!.userId, 'json');
+    const imported = await importLeadRows(leads, req.user!.userId, getCompanyIdFromRequest(req), 'json');
     res.json({ message: `${imported} leads importados com sucesso` });
   } catch (err) {
     console.error(err);
@@ -714,6 +1006,70 @@ router.post('/preview/xlsx', authorize('ADMIN', 'MANAGER'), async (req: Request,
   }
 });
 
+router.post('/xlsx/progress', authorize('ADMIN', 'MANAGER'), async (req: Request, res: Response) => {
+  try {
+    const { data } = req.body;
+    if (!data) {
+      res.status(400).json({ error: 'Nenhum arquivo enviado' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    writeImportProgress(res, {
+      type: 'progress',
+      phase: 'reading',
+      processedRows: 0,
+      totalRows: 0,
+      message: 'Lendo arquivo Excel...',
+    });
+
+    const buffer = Buffer.from(data, 'base64');
+    const rows = await readRowsFromXlsxBuffer(buffer);
+
+    writeImportProgress(res, {
+      type: 'progress',
+      phase: 'reading',
+      processedRows: 0,
+      totalRows: rows.length,
+      message: `${rows.length} linhas encontradas no Excel`,
+    });
+
+    const imported = await importLeadRows(rows, req.user!.userId, getCompanyIdFromRequest(req), 'xlsx', (update) => {
+      writeImportProgress(res, { type: 'progress', ...update });
+    });
+
+    writeImportProgress(res, {
+      type: 'complete',
+      phase: 'completed',
+      processedRows: rows.length,
+      totalRows: rows.length,
+      importedRows: imported,
+      message: `${imported} leads importados com sucesso`,
+    });
+    res.end();
+  } catch (err) {
+    console.error(err);
+    const message = err instanceof Error ? err.message : 'Erro ao importar XLSX';
+    if (!res.headersSent) {
+      res.status(500).json({ error: message });
+      return;
+    }
+
+    writeImportProgress(res, {
+      type: 'error',
+      phase: 'completed',
+      processedRows: 0,
+      totalRows: 0,
+      message,
+    });
+    res.end();
+  }
+});
+
 router.post('/xlsx', authorize('ADMIN', 'MANAGER'), async (req: Request, res: Response) => {
   try {
     const { data } = req.body;
@@ -725,7 +1081,7 @@ router.post('/xlsx', authorize('ADMIN', 'MANAGER'), async (req: Request, res: Re
     const buffer = Buffer.from(data, 'base64');
     const rows = await readRowsFromXlsxBuffer(buffer);
 
-    const imported = await importLeadRows(rows, req.user!.userId, 'xlsx');
+    const imported = await importLeadRows(rows, req.user!.userId, getCompanyIdFromRequest(req), 'xlsx');
     res.json({ message: `${imported} leads importados com sucesso` });
   } catch (err) {
     console.error(err);

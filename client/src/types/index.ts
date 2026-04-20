@@ -227,6 +227,7 @@ export interface ImportPreviewRow {
   createdAt?: string | null;
   updatedAt?: string | null;
   willCreateStage: boolean;
+  willCreateOwner: boolean;
   tagsToCreate: string[];
   issues: string[];
 }
@@ -238,6 +239,7 @@ export interface ImportPreview {
   canImport: boolean;
   newStages: string[];
   newTags: string[];
+  newOwners: string[];
   unknownOwners: Array<{ rowNumber: number; owner: string }>;
   rows: ImportPreviewRow[];
 }

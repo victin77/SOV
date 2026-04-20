@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, Download, FileJson, FileSpreadsheet, Check, AlertCircle, Eye } from 'lucide-react';
 import { api } from '../api/client';
+import type { ImportProgressEvent } from '../api/client';
 import type { ImportPreview } from '../types';
 
 type ImportType = 'json' | 'xlsx';
@@ -8,6 +9,24 @@ type ImportType = 'json' | 'xlsx';
 type PendingImport =
   | { type: 'json'; leads: unknown[] }
   | { type: 'xlsx'; base64Data: string };
+
+type ImportProgressState = {
+  visible: boolean;
+  percent: number;
+  message: string;
+  processedRows: number;
+  totalRows: number;
+  phase: 'idle' | ImportProgressEvent['phase'];
+};
+
+const initialImportProgress: ImportProgressState = {
+  visible: false,
+  percent: 0,
+  message: '',
+  processedRows: 0,
+  totalRows: 0,
+  phase: 'idle',
+};
 
 export default function ImportExport() {
   const [previewing, setPreviewing] = useState(false);
@@ -17,16 +36,54 @@ export default function ImportExport() {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [importProgress, setImportProgress] = useState<ImportProgressState>(initialImportProgress);
   const fileRef = useRef<HTMLInputElement>(null);
   const [importType, setImportType] = useState<ImportType>('json');
 
   const previewRows = useMemo(() => preview?.rows.slice(0, 8) || [], [preview]);
 
-  const resetImportState = () => {
+  useEffect(() => {
+    if (!confirmingImport) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = 'A importacao ainda esta em andamento.';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [confirmingImport]);
+
+  const resetImportState = (options?: { keepProgress?: boolean }) => {
     setPreview(null);
     setPendingImport(null);
     setSelectedFileName(null);
+    if (!options?.keepProgress) {
+      setImportProgress(initialImportProgress);
+    }
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const updateImportProgress = (event: ImportProgressEvent) => {
+    const totalRows = event.totalRows || preview?.totalRows || 0;
+    const processedRows = event.processedRows || 0;
+    const percent =
+      event.type === 'complete'
+        ? 100
+        : event.phase === 'reading'
+          ? totalRows > 0 ? 12 : 6
+          : totalRows > 0
+            ? Math.min(99, Math.max(15, Math.round(15 + (processedRows / totalRows) * 80)))
+            : 15;
+
+    setImportProgress({
+      visible: true,
+      percent,
+      message: event.message,
+      processedRows,
+      totalRows,
+      phase: event.phase,
+    });
   };
 
   const handleExportJson = async () => {
@@ -75,6 +132,7 @@ export default function ImportExport() {
     setPreview(null);
     setPendingImport(null);
     setSelectedFileName(file.name);
+    setImportProgress(initialImportProgress);
 
     try {
       if (importType === 'json') {
@@ -106,17 +164,40 @@ export default function ImportExport() {
 
     setConfirmingImport(true);
     setResult(null);
+    setImportProgress({
+      visible: true,
+      percent: 3,
+      message: 'Iniciando importacao. Nao saia desta aba ate concluir.',
+      processedRows: 0,
+      totalRows: preview.totalRows,
+      phase: 'preparing',
+    });
 
     try {
-      const response =
-        pendingImport.type === 'json'
-          ? await api.importJson(pendingImport.leads as any[])
-          : await api.importXlsx(pendingImport.base64Data);
+      const response = pendingImport.type === 'json'
+        ? await api.importJson(pendingImport.leads as any[])
+        : await api.importXlsxWithProgress(pendingImport.base64Data, updateImportProgress);
+
+      setImportProgress((current) => ({
+        ...current,
+        visible: true,
+        percent: 100,
+        message: response.message,
+        processedRows: current.totalRows || preview.totalRows,
+        totalRows: current.totalRows || preview.totalRows,
+        phase: 'completed',
+      }));
 
       setResult({ type: 'success', message: response.message });
-      resetImportState();
+      resetImportState({ keepProgress: true });
     } catch (err: unknown) {
       setResult({ type: 'error', message: err instanceof Error ? err.message : 'Erro ao importar' });
+      setImportProgress((current) => ({
+        ...current,
+        visible: true,
+        percent: current.percent || 0,
+        message: err instanceof Error ? err.message : 'Erro ao importar',
+      }));
     } finally {
       setConfirmingImport(false);
     }
@@ -136,6 +217,46 @@ export default function ImportExport() {
         >
           {result.type === 'success' ? <Check className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
           <span className="text-sm">{result.message}</span>
+        </div>
+      )}
+
+      {importProgress.visible && (
+        <div className="rounded-lg border border-primary-200 bg-primary-50 p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-primary-900">
+                {importProgress.phase === 'completed' ? 'Importacao concluida' : 'Importacao em andamento'}
+              </p>
+              <p className="text-sm text-primary-700">{importProgress.message}</p>
+            </div>
+            <span className="text-sm font-semibold text-primary-900">{importProgress.percent}%</span>
+          </div>
+
+          <div
+            className="h-3 w-full overflow-hidden rounded bg-white border border-primary-100"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={importProgress.percent}
+          >
+            <div
+              className="h-full bg-primary-600 transition-all duration-500"
+              style={{ width: `${importProgress.percent}%` }}
+            />
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs text-primary-700">
+            <span>
+              {importProgress.totalRows > 0
+                ? `${importProgress.processedRows} de ${importProgress.totalRows} linhas processadas`
+                : 'Preparando leitura do arquivo'}
+            </span>
+            {confirmingImport && (
+              <span className="font-medium">
+                Nao saia desta aba para nao interromper a importacao.
+              </span>
+            )}
+          </div>
         </div>
       )}
 
@@ -251,7 +372,7 @@ export default function ImportExport() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="rounded-xl border border-gray-200 p-4 bg-white">
               <p className="text-xs uppercase tracking-wide text-gray-500">Linhas</p>
               <p className="text-2xl font-semibold text-gray-900">{preview.totalRows}</p>
@@ -267,6 +388,10 @@ export default function ImportExport() {
             <div className="rounded-xl border border-gray-200 p-4 bg-white">
               <p className="text-xs uppercase tracking-wide text-gray-500">Tags novas</p>
               <p className="text-2xl font-semibold text-gray-900">{preview.newTags.length}</p>
+            </div>
+            <div className="rounded-xl border border-gray-200 p-4 bg-white">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Usuarios novos</p>
+              <p className="text-2xl font-semibold text-gray-900">{preview.newOwners?.length || 0}</p>
             </div>
           </div>
 
@@ -296,14 +421,14 @@ export default function ImportExport() {
             </div>
           )}
 
-          {preview.unknownOwners.length > 0 && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-              <p className="text-sm font-medium text-red-900 mb-2">Owners nao encontrados</p>
-              <div className="space-y-1">
-                {preview.unknownOwners.map((item) => (
-                  <p key={`${item.rowNumber}-${item.owner}`} className="text-sm text-red-700">
-                    Linha {item.rowNumber}: {item.owner}
-                  </p>
+          {preview.newOwners && preview.newOwners.length > 0 && (
+            <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
+              <p className="text-sm font-medium text-purple-900 mb-2">Usuarios que serao criados (como Vendedor)</p>
+              <div className="flex flex-wrap gap-2">
+                {preview.newOwners.map((owner) => (
+                  <span key={owner} className="px-2 py-1 rounded-full bg-white text-purple-800 text-xs border border-purple-200">
+                    {owner}
+                  </span>
                 ))}
               </div>
             </div>
@@ -344,7 +469,12 @@ export default function ImportExport() {
                         <p className="text-xs text-blue-600 mt-1">sera criada</p>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-gray-700">{row.owner || '-'}</td>
+                    <td className="px-4 py-3 text-gray-700">
+                      {row.owner || '-'}
+                      {row.willCreateOwner && (
+                        <p className="text-xs text-purple-600 mt-1">sera criado</p>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         {row.tags.length > 0 ? (
@@ -378,9 +508,14 @@ export default function ImportExport() {
               disabled={!preview.canImport || confirmingImport}
               className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {confirmingImport ? 'Importando...' : 'Confirmar importacao'}
+              {confirmingImport ? 'Importando... nao saia desta aba' : 'Confirmar importacao'}
             </button>
-            <button type="button" onClick={resetImportState} className="btn-secondary">
+            <button
+              type="button"
+              onClick={() => resetImportState()}
+              disabled={confirmingImport}
+              className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Escolher outro arquivo
             </button>
           </div>

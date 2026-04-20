@@ -26,6 +26,30 @@ test('mapRowToLeadInput reads accented responsible headers', () => {
   assert.equal(lead.owner, 'Grazi Santos');
 });
 
+test('mapRowToLeadInput reads owner headers regardless of casing', () => {
+  const lead = mapRowToLeadInput({
+    Nome: 'Lead de teste',
+    OWNER: 'GRAZI SANTOS',
+  });
+
+  assert.equal(lead.owner, 'GRAZI SANTOS');
+});
+
+test('mapRowToLeadInput reads misspelled responsible headers', () => {
+  const lead = mapRowToLeadInput({
+    Nome: 'Lead de teste',
+    Responsalvel: 'Grazi Santos',
+  });
+
+  assert.equal(lead.owner, 'Grazi Santos');
+});
+
+test('findOwnerUser matches owner names case-insensitively', () => {
+  const owner = findOwnerUser(users, 'gRaZi SaNtOs');
+
+  assert.equal(owner?.id, 'u1');
+});
+
 test('findOwnerUser matches a unique owner token in a decorated value', () => {
   const owner = findOwnerUser(users, 'grazi - carteira ativa');
 
