@@ -12,6 +12,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (user: User) => void;
   impersonation: ImpersonationState;
@@ -59,6 +60,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const { user: u, token, refreshToken } = await api.login(email, password);
     api.storeSession(token, refreshToken);
+    setUser(u);
+  }, []);
+
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    const { user: u } = await api.googleLogin(idToken);
+    api.storeSession();
     setUser(u);
   }, []);
 
@@ -110,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, updateUser, impersonation, enterCompany, exitCompany, isSuperAdmin }}>
+    <AuthContext.Provider value={{ user, loading, login, loginWithGoogle, logout, updateUser, impersonation, enterCompany, exitCompany, isSuperAdmin }}>
       {children}
     </AuthContext.Provider>
   );

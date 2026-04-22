@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, UserCheck, UserX, MessageCircle, Trash2 } from 'lucide-react';
+import { Plus, Edit2, UserCheck, UserX, MessageCircle, Trash2, KeyRound, Copy, Check } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import type { User } from '../types';
@@ -19,6 +19,8 @@ export default function UsersPage() {
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'SELLER', phone: '', whatsappNumber: '' });
+  const [resetResult, setResetResult] = useState<{ userName: string; userEmail: string; temporaryPassword: string; emailSent: boolean } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const isAdmin = me?.role === 'ADMIN' || me?.role === 'SUPER_ADMIN';
 
@@ -54,8 +56,9 @@ export default function UsersPage() {
         if (form.password) data.password = form.password;
         await api.updateUser(editing.id, data);
       } else {
-        if (!form.password) { alert('Senha obrigatoria para novo usuario'); return; }
-        await api.createUser(form);
+        const payload: any = { name: form.name, email: form.email, role: form.role, phone: form.phone || null, whatsappNumber: form.whatsappNumber || null };
+        if (form.password) payload.password = form.password;
+        await api.createUser(payload);
       }
       setModal(false);
       load();
@@ -72,6 +75,33 @@ export default function UsersPage() {
       load();
     } catch (err: any) {
       alert(err.message || 'Erro ao alterar status do usuario');
+    }
+  };
+
+  const handleResetPassword = async (u: User) => {
+    if (u.id === me?.id) { alert('Use a tela de perfil para alterar sua propria senha.'); return; }
+    if (!confirm(`Gerar nova senha temporaria para "${u.name}"? A senha atual sera invalidada e o usuario sera forcado a trocar no proximo login.`)) return;
+    try {
+      const result = await api.adminResetUserPassword(u.id);
+      setResetResult({
+        userName: u.name,
+        userEmail: u.email,
+        temporaryPassword: result.temporaryPassword,
+        emailSent: result.emailSent,
+      });
+    } catch (err: any) {
+      alert(err.message || 'Erro ao redefinir senha');
+    }
+  };
+
+  const handleCopyPassword = async () => {
+    if (!resetResult) return;
+    try {
+      await navigator.clipboard.writeText(resetResult.temporaryPassword);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // noop
     }
   };
 
@@ -147,10 +177,15 @@ export default function UsersPage() {
                 <td className="px-4 py-3">
                   {isAdmin && (
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => openEdit(u)} className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-gray-100">
+                      <button onClick={() => openEdit(u)} className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-gray-100" title="Editar">
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleToggleActive(u)} className="p-1.5 text-gray-400 hover:text-amber-600 rounded-lg hover:bg-gray-100">
+                      {u.id !== me?.id && (
+                        <button onClick={() => handleResetPassword(u)} className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg hover:bg-gray-100" title="Redefinir senha">
+                          <KeyRound className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button onClick={() => handleToggleActive(u)} className="p-1.5 text-gray-400 hover:text-amber-600 rounded-lg hover:bg-gray-100" title={u.active !== false ? 'Desativar' : 'Reativar'}>
                         {u.active !== false ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
                       </button>
                       <button onClick={() => handleDelete(u)} className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-gray-100" title="Excluir permanentemente">
@@ -186,17 +221,69 @@ export default function UsersPage() {
               </div>
             </div>
             {isAdmin && (
-              <div className="flex gap-2 mt-3 pt-3 border-t">
-                <button onClick={() => openEdit(u)} className="btn-secondary text-xs flex-1">Editar</button>
-                <button onClick={() => handleToggleActive(u)} className="btn-secondary text-xs flex-1">
+              <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t">
+                <button onClick={() => openEdit(u)} className="btn-secondary text-xs">Editar</button>
+                {u.id !== me?.id && (
+                  <button onClick={() => handleResetPassword(u)} className="btn-secondary text-xs">Nova senha</button>
+                )}
+                <button onClick={() => handleToggleActive(u)} className="btn-secondary text-xs">
                   {u.active !== false ? 'Desativar' : 'Ativar'}
                 </button>
-                <button onClick={() => handleDelete(u)} className="btn-secondary text-xs flex-1 text-red-600 hover:bg-red-50">Excluir</button>
+                <button onClick={() => handleDelete(u)} className="btn-secondary text-xs text-red-600 hover:bg-red-50">Excluir</button>
               </div>
             )}
           </div>
         ))}
       </div>
+
+      {/* Reset Password Result Modal */}
+      <Modal
+        open={!!resetResult}
+        onClose={() => { setResetResult(null); setCopied(false); }}
+        title="Senha temporaria gerada"
+        size="md"
+      >
+        {resetResult && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Copie e envie essa senha para <strong>{resetResult.userName}</strong> ({resetResult.userEmail}) de forma segura.
+              Ela so aparece agora — nao sera possivel ver de novo depois. O usuario sera forcado a trocar no proximo login.
+            </div>
+
+            <div>
+              <label className="label">Senha temporaria</label>
+              <div className="flex gap-2">
+                <input
+                  className="input font-mono"
+                  value={resetResult.temporaryPassword}
+                  readOnly
+                  onFocus={e => e.currentTarget.select()}
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyPassword}
+                  className="btn-secondary flex items-center gap-1 whitespace-nowrap"
+                  title="Copiar"
+                >
+                  {copied ? <><Check className="w-4 h-4 text-green-600" /> Copiado</> : <><Copy className="w-4 h-4" /> Copiar</>}
+                </button>
+              </div>
+            </div>
+
+            <div className={`rounded-lg border px-4 py-3 text-sm ${resetResult.emailSent ? 'border-green-200 bg-green-50 text-green-800' : 'border-gray-200 bg-gray-50 text-gray-600'}`}>
+              {resetResult.emailSent
+                ? 'Um email com a senha temporaria foi enviado para o usuario.'
+                : 'Nao foi possivel enviar email automaticamente. Repasse a senha por outro canal seguro.'}
+            </div>
+
+            <div className="flex justify-end">
+              <button className="btn-primary" onClick={() => { setResetResult(null); setCopied(false); }}>
+                Fechar
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Modal */}
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Editar Usuario' : 'Novo Usuario'} size="md">
@@ -210,8 +297,11 @@ export default function UsersPage() {
             <input className="input" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
           </div>
           <div>
-            <label className="label">{editing ? 'Nova Senha (opcional)' : 'Senha *'}</label>
-            <input className="input" type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder={editing ? 'Deixe vazio para manter' : 'Minimo 8 caracteres, 1 letra e 1 numero'} />
+            <label className="label">{editing ? 'Nova Senha (opcional)' : 'Senha (opcional)'}</label>
+            <input className="input" type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder={editing ? 'Deixe vazio para manter' : 'Deixe vazio se o usuario for logar so com Google'} />
+            <p className="text-xs text-gray-500 mt-1">
+              {editing ? 'Se preenchida, deve ter mínimo 8 caracteres, 1 letra e 1 número.' : 'Sem senha, o usuário só poderá entrar via Google. Pode usar "Esqueci a senha" para definir uma depois.'}
+            </p>
           </div>
           <div>
             <label className="label">Perfil</label>

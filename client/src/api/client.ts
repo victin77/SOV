@@ -165,6 +165,30 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
 
+  googleLogin: (idToken: string) =>
+    request<{ user: any }>('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ idToken }),
+    }),
+
+  forgotPassword: (email: string) =>
+    request<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (token: string, newPassword: string) =>
+    request<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
+    }),
+
+  adminResetUserPassword: (userId: string) =>
+    request<{ message: string; temporaryPassword: string; emailSent: boolean }>(
+      `/users/${userId}/reset-password`,
+      { method: 'POST' }
+    ),
+
   register: (data: { email: string; password: string; name: string; role?: string }) =>
     request<{ user: any; token?: string }>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
 
@@ -304,7 +328,7 @@ export const api = {
   // Users
   getUsers: () => request<any[]>('/users'),
 
-  createUser: (data: { email: string; password: string; name: string; role?: string; phone?: string; whatsappNumber?: string }) =>
+  createUser: (data: { email: string; password?: string; name: string; role?: string; phone?: string; whatsappNumber?: string }) =>
     request<any>('/users', { method: 'POST', body: JSON.stringify(data) }),
 
   updateUser: (id: string, data: any) =>

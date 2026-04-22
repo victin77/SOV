@@ -2,7 +2,10 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import LoadingSpinner from './components/LoadingSpinner';
+import ForcePasswordChange from './components/ForcePasswordChange';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Pipeline from './pages/Pipeline';
 import Leads from './pages/Leads';
@@ -22,7 +25,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner /></div>;
   if (!user) return <Navigate to="/login" />;
-  return <Layout>{children}</Layout>;
+  return <Layout>{children}<ForcePasswordChange /></Layout>;
 }
 
 function RoleRoute({ children, roles }: { children: React.ReactNode; roles: string[] }) {
@@ -58,6 +61,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+      <Route path="/forgot-password" element={user ? <Navigate to="/" /> : <ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       <Route path="/admin" element={<SuperAdminRoute><SuperAdmin /></SuperAdminRoute>} />
       <Route path="/admin/company/:id" element={<SuperAdminRoute><SuperAdminCompany /></SuperAdminRoute>} />

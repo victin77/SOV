@@ -1,10 +1,13 @@
 import { useState, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
 import { Target, Eye, EyeOff } from 'lucide-react';
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+
 export default function Login() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,6 +24,23 @@ export default function Login() {
       navigate('/');
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
+    if (!credentialResponse.credential) {
+      setError('Token do Google invalido');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      await loginWithGoogle(credentialResponse.credential);
+      navigate('/');
+    } catch (err: any) {
+      setError(err.message || 'Erro ao fazer login com Google');
     } finally {
       setLoading(false);
     }
@@ -46,6 +66,29 @@ export default function Login() {
             </div>
           )}
 
+          {GOOGLE_CLIENT_ID && (
+            <>
+              <div className="flex justify-center mb-4">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => setError('Falha ao autenticar com Google')}
+                  text="signin_with"
+                  shape="rectangular"
+                  theme="outline"
+                />
+              </div>
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200"></div>
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-white px-3 text-gray-500">ou entre com email e senha</span>
+                </div>
+              </div>
+            </>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="label">Email</label>
@@ -61,7 +104,12 @@ export default function Login() {
             </div>
 
             <div>
-              <label className="label">Senha</label>
+              <div className="flex items-center justify-between">
+                <label className="label">Senha</label>
+                <Link to="/forgot-password" className="text-xs text-primary-600 hover:text-primary-700 hover:underline">
+                  Esqueci a senha
+                </Link>
+              </div>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}

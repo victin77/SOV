@@ -13,6 +13,7 @@ export interface User {
   companyId?: string | null;
   company?: { id: string; name: string; slug: string };
   active?: boolean;
+  mustChangePassword?: boolean;
   createdAt: string;
   lastSeenAt?: string | null;
   _count?: { leads: number; appointments: number };
