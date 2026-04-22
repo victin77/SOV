@@ -38,7 +38,10 @@ export async function ensureDefaultCompanyAndBackfill(prisma: PrismaClient) {
   });
 
   await Promise.all([
-    prisma.user.updateMany({ where: { companyId: null }, data: { companyId: company.id } }),
+    prisma.user.updateMany({
+      where: { companyId: null, role: { not: 'SUPER_ADMIN' } },
+      data: { companyId: company.id },
+    }),
     prisma.lead.updateMany({ where: { companyId: null }, data: { companyId: company.id } }),
     prisma.pipelineStage.updateMany({ where: { companyId: null }, data: { companyId: company.id } }),
     prisma.tag.updateMany({ where: { companyId: null }, data: { companyId: company.id } }),
