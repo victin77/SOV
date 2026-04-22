@@ -315,23 +315,25 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
     });
 
     const resetUrl = `${getAppUrl()}/reset-password?token=${token}`;
-    const sent = await sendPasswordResetEmail({
-      to: user.email,
-      name: user.name,
-      resetUrl,
-    });
 
-    await logAudit({
-      userId: user.id,
-      companyId: user.companyId,
-      action: 'FORGOT_PASSWORD',
-      entity: 'user',
-      entityId: user.id,
-      details: { emailSent: sent },
-      ip: firstString(req.ip),
-    });
-
+    // Responde imediatamente; o envio do email roda em background
+    // (SMTP pode demorar ou falhar, mas isso nao deve travar a UX).
     res.json(genericResponse);
+
+    sendPasswordResetEmail({ to: user.email, name: user.name, resetUrl })
+      .then((sent) => {
+        logAudit({
+          userId: user.id,
+          companyId: user.companyId,
+          action: 'FORGOT_PASSWORD',
+          entity: 'user',
+          entityId: user.id,
+          details: { emailSent: sent },
+          ip: firstString(req.ip),
+        }).catch((err) => console.error('logAudit FORGOT_PASSWORD failed', err));
+      })
+      .catch((err) => console.error('sendPasswordResetEmail failed', err));
+    return;
   } catch (err) {
     console.error('POST /auth/forgot-password failed', err);
     // Mantem resposta generica mesmo em erro pra nao vazar info
