@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import { prisma } from '../utils/prisma';
 import bcrypt from 'bcryptjs';
 import { authenticate, authorize } from '../middleware/auth';
@@ -6,6 +7,7 @@ import { logAudit } from '../utils/audit';
 import { firstString } from '../utils/request';
 import { companyWhere, getCompanyIdFromRequest } from '../utils/tenancy';
 import { createUserSchema, updateUserSchema, validateBody } from '../utils/validation';
+import { sendTemporaryPasswordEmail } from '../utils/email';
 
 const router = Router();
 
@@ -51,7 +53,7 @@ router.post('/', authorize('ADMIN'), async (req: Request, res: Response) => {
       return;
     }
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hashedPassword = password ? await bcrypt.hash(password, 12) : null;
     const user = await prisma.user.create({
       data: {
         email,
@@ -169,6 +171,83 @@ router.put('/:id', authorize('ADMIN'), async (req: Request, res: Response) => {
   }
 });
 
+router.post('/:id/reset-password', authorize('ADMIN'), async (req: Request, res: Response) => {
+  try {
+    const userId = firstString(req.params.id);
+    if (!userId) {
+      res.status(400).json({ error: 'Usuário inválido' });
+      return;
+    }
+
+    if (userId === req.user!.userId) {
+      res.status(400).json({ error: 'Use a tela de perfil para alterar sua propria senha.' });
+      return;
+    }
+
+    const isSuperAdmin = req.user!.role === 'SUPER_ADMIN';
+    const targetUser = isSuperAdmin
+      ? await prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true, email: true, name: true, companyId: true, role: true, active: true },
+        })
+      : await prisma.user.findFirst({
+          where: { id: userId, ...companyWhere(req) },
+          select: { id: true, email: true, name: true, companyId: true, role: true, active: true },
+        });
+
+    if (!targetUser) {
+      res.status(404).json({ error: 'Usuario nao encontrado' });
+      return;
+    }
+
+    // Admin comum nao pode resetar outro ADMIN nem SUPER_ADMIN
+    if (!isSuperAdmin && (targetUser.role === 'ADMIN' || targetUser.role === 'SUPER_ADMIN')) {
+      res.status(403).json({ error: 'Voce nao pode redefinir a senha de outro administrador.' });
+      return;
+    }
+
+    const temporaryPassword = generateTemporaryPassword();
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 12);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: targetUser.id },
+        data: { password: hashedPassword, mustChangePassword: true },
+      }),
+      prisma.refreshToken.deleteMany({ where: { userId: targetUser.id } }),
+      prisma.passwordResetToken.updateMany({
+        where: { userId: targetUser.id, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    const emailSent = await sendTemporaryPasswordEmail({
+      to: targetUser.email,
+      name: targetUser.name,
+      temporaryPassword,
+    });
+
+    await logAudit({
+      userId: req.user!.userId,
+      companyId: req.user!.companyId,
+      action: 'ADMIN_RESET_PASSWORD',
+      entity: 'user',
+      entityId: targetUser.id,
+      details: { emailSent, targetEmail: targetUser.email },
+      ip: firstString(req.ip),
+    });
+
+    res.json({
+      message: 'Senha temporaria gerada. O usuario sera forcado a troca-la no proximo login.',
+      temporaryPassword,
+      emailSent,
+    });
+  } catch (err) {
+    console.error('POST /users/:id/reset-password failed', err);
+    res.status(500).json({ error: 'Erro ao redefinir senha' });
+  }
+});
+
 router.delete('/:id', authorize('ADMIN'), async (req: Request, res: Response) => {
   try {
     const userId = firstString(req.params.id);
@@ -226,5 +305,15 @@ router.delete('/:id', authorize('ADMIN'), async (req: Request, res: Response) =>
     res.status(500).json({ error: 'Erro ao excluir usuário' });
   }
 });
+
+function generateTemporaryPassword(): string {
+  // 10 chars aleatorios + garantia de 1 letra e 1 numero
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let pass = '';
+  for (let i = 0; i < 10; i++) {
+    pass += chars[crypto.randomInt(chars.length)];
+  }
+  return pass + 'a1';
+}
 
 export default router;

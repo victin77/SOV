@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { prisma } from '../utils/prisma';
 import {
   clearAuthCookies,
@@ -14,7 +15,19 @@ import {
 } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import { firstString } from '../utils/request';
-import { loginSchema, registerSchema, changePasswordSchema, updateProfileSchema, validateBody } from '../utils/validation';
+import {
+  loginSchema,
+  registerSchema,
+  changePasswordSchema,
+  updateProfileSchema,
+  googleLoginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  validateBody,
+} from '../utils/validation';
+import { verifyGoogleIdToken, isGoogleLoginEnabled } from '../utils/google';
+import { isSuperAdminEmail } from '../utils/bootstrap';
+import { sendPasswordResetEmail, getAppUrl } from '../utils/email';
 
 const router = Router();
 
@@ -27,6 +40,7 @@ const userSelect = {
   phone: true,
   whatsappNumber: true,
   companyId: true,
+  mustChangePassword: true,
   company: {
     select: {
       id: true,
@@ -111,6 +125,11 @@ router.post('/login', async (req: Request, res: Response) => {
       return;
     }
 
+    if (!user.password) {
+      res.status(401).json({ error: 'Este usuário usa login via Google. Clique em "Entrar com Google".' });
+      return;
+    }
+
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
       res.status(401).json({ error: 'Credenciais inválidas' });
@@ -157,6 +176,210 @@ router.post('/login', async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao fazer login' });
+  }
+});
+
+router.post('/google', async (req: Request, res: Response) => {
+  try {
+    if (!isGoogleLoginEnabled()) {
+      res.status(503).json({ error: 'Login via Google nao configurado no servidor' });
+      return;
+    }
+
+    const parsed = validateBody(googleLoginSchema, req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+
+    const profile = await verifyGoogleIdToken(parsed.data.idToken);
+    if (!profile) {
+      res.status(401).json({ error: 'Token do Google invalido' });
+      return;
+    }
+    if (!profile.emailVerified) {
+      res.status(403).json({ error: 'Seu email do Google nao foi verificado' });
+      return;
+    }
+
+    let user = await prisma.user.findUnique({ where: { email: profile.email } });
+
+    // Auto-cria super admin se o email estiver na whitelist
+    if (!user && isSuperAdminEmail(profile.email)) {
+      user = await prisma.user.create({
+        data: {
+          email: profile.email,
+          name: profile.name || 'Super Admin',
+          role: 'SUPER_ADMIN',
+          googleId: profile.googleId,
+          avatar: profile.picture,
+          lastSeenAt: new Date(),
+        },
+      });
+      console.log(`Super admin criado via Google: ${user.email}`);
+    }
+
+    if (!user) {
+      res.status(403).json({
+        error: 'Este Gmail nao esta autorizado. Peca ao administrador da sua empresa para cadastrar o seu acesso.',
+      });
+      return;
+    }
+
+    if (!user.active) {
+      res.status(403).json({ error: 'Usuario desativado. Entre em contato com o administrador.' });
+      return;
+    }
+
+    // Liga googleId ao usuario se ainda nao estiver ligado
+    if (!user.googleId) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { googleId: profile.googleId },
+      });
+    } else if (user.googleId !== profile.googleId) {
+      res.status(403).json({ error: 'Este email ja esta vinculado a outra conta Google.' });
+      return;
+    }
+
+    // Bloqueia se empresa do usuario esta desativada (SUPER_ADMIN nao tem empresa)
+    if (user.companyId && user.role !== 'SUPER_ADMIN') {
+      const company = await prisma.company.findUnique({ where: { id: user.companyId }, select: { active: true } });
+      if (company && !company.active) {
+        res.status(403).json({ error: 'Sua empresa esta desativada. Entre em contato com o suporte.' });
+        return;
+      }
+    }
+
+    const freshUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { lastSeenAt: new Date() },
+      select: userSelect,
+    });
+
+    const token = generateToken({
+      userId: freshUser.id,
+      email: freshUser.email,
+      role: freshUser.role,
+      companyId: freshUser.companyId,
+    });
+
+    const refreshToken = await generateRefreshToken(freshUser.id);
+    setAuthCookies(res, token, refreshToken);
+
+    await logAudit({
+      userId: user.id,
+      companyId: freshUser.companyId,
+      action: 'LOGIN_GOOGLE',
+      entity: 'user',
+      entityId: user.id,
+      ip: firstString(req.ip),
+    });
+
+    res.json({ user: freshUser });
+  } catch (err) {
+    console.error('POST /auth/google failed', err);
+    res.status(500).json({ error: 'Erro ao fazer login com Google' });
+  }
+});
+
+router.post('/forgot-password', async (req: Request, res: Response) => {
+  // Resposta sempre igual, independente de o usuario existir (nao vaza whitelist)
+  const genericResponse = { message: 'Se o email estiver cadastrado, voce recebera um link de redefinicao.' };
+
+  try {
+    const parsed = validateBody(forgotPasswordSchema, req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+
+    const email = parsed.data.email.toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user || !user.active) {
+      res.json(genericResponse);
+      return;
+    }
+
+    // Invalida tokens antigos do usuario
+    await prisma.passwordResetToken.deleteMany({
+      where: { userId: user.id, usedAt: null },
+    });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+
+    await prisma.passwordResetToken.create({
+      data: { token, userId: user.id, expiresAt },
+    });
+
+    const resetUrl = `${getAppUrl()}/reset-password?token=${token}`;
+    const sent = await sendPasswordResetEmail({
+      to: user.email,
+      name: user.name,
+      resetUrl,
+    });
+
+    await logAudit({
+      userId: user.id,
+      companyId: user.companyId,
+      action: 'FORGOT_PASSWORD',
+      entity: 'user',
+      entityId: user.id,
+      details: { emailSent: sent },
+      ip: firstString(req.ip),
+    });
+
+    res.json(genericResponse);
+  } catch (err) {
+    console.error('POST /auth/forgot-password failed', err);
+    // Mantem resposta generica mesmo em erro pra nao vazar info
+    res.json(genericResponse);
+  }
+});
+
+router.post('/reset-password', async (req: Request, res: Response) => {
+  try {
+    const parsed = validateBody(resetPasswordSchema, req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+    const { token, newPassword } = parsed.data;
+
+    const stored = await prisma.passwordResetToken.findUnique({ where: { token } });
+    if (!stored || stored.usedAt || stored.expiresAt < new Date()) {
+      res.status(400).json({ error: 'Link invalido ou expirado. Solicite um novo.' });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: stored.userId },
+        data: { password: hashedPassword, mustChangePassword: false },
+      }),
+      prisma.passwordResetToken.update({
+        where: { id: stored.id },
+        data: { usedAt: new Date() },
+      }),
+      prisma.refreshToken.deleteMany({ where: { userId: stored.userId } }),
+    ]);
+
+    await logAudit({
+      userId: stored.userId,
+      action: 'RESET_PASSWORD',
+      entity: 'user',
+      entityId: stored.userId,
+      ip: firstString(req.ip),
+    });
+
+    res.json({ message: 'Senha redefinida com sucesso. Faca login com a nova senha.' });
+  } catch (err) {
+    console.error('POST /auth/reset-password failed', err);
+    res.status(500).json({ error: 'Erro ao redefinir senha' });
   }
 });
 
@@ -231,6 +454,11 @@ router.put('/password', authenticate, async (req: Request, res: Response) => {
       return;
     }
 
+    if (!user.password) {
+      res.status(400).json({ error: 'Voce ainda nao tem senha local. Use "Esqueci a senha" para definir uma.' });
+      return;
+    }
+
     const valid = await bcrypt.compare(currentPassword, user.password);
     if (!valid) {
       res.status(400).json({ error: 'Senha atual incorreta' });
@@ -238,7 +466,10 @@ router.put('/password', authenticate, async (req: Request, res: Response) => {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
-    await prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword, mustChangePassword: false },
+    });
 
     await logAudit({
       userId: user.id,

@@ -7,7 +7,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "seed": "tsx src/seed.ts",
-    "create-super-admin": "tsx src/create-super-admin.ts"
+    "create-super-admin": "tsx src/create-super-admin.ts",
+    "migrate-existing-users": "tsx src/migrate-existing-users.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",
@@ -16,9 +17,11 @@
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "express-rate-limit": "^8.3.2",
+    "google-auth-library": "^10.6.2",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.1",
+    "resend": "^6.12.2",
     "zod": "^3.24.4"
   },
   "devDependencies": {

@@ -36,11 +36,24 @@ export const registerSchema = z.object({
 
 export const createUserSchema = z.object({
   email: z.string().email('Email inválido'),
-  password: passwordSchema,
+  password: passwordSchema.optional(),
   name: z.string().min(1, 'Nome é obrigatório').max(100),
   role: z.enum(['ADMIN', 'MANAGER', 'SELLER']).optional(),
   phone: z.string().max(30).optional().nullable(),
   whatsappNumber: z.string().max(30).optional().nullable(),
+});
+
+export const googleLoginSchema = z.object({
+  idToken: z.string().min(10, 'idToken obrigatório'),
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('Email inválido'),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(10, 'Token obrigatório'),
+  newPassword: passwordSchema,
 });
 
 export const updateUserSchema = z.object({

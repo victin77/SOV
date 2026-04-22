@@ -1,39 +1,32 @@
 import type { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+
+export function getSuperAdminEmails(): string[] {
+  const raw = process.env.SUPER_ADMIN_EMAILS || '';
+  return raw
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isSuperAdminEmail(email: string): boolean {
+  const normalized = email.trim().toLowerCase();
+  return getSuperAdminEmails().includes(normalized);
+}
 
 export async function ensureSuperAdmin(prisma: PrismaClient) {
-  const existing = await prisma.user.findFirst({
-    where: { role: 'SUPER_ADMIN' },
-  });
+  const emails = getSuperAdminEmails();
 
-  if (existing) return;
-
-  const email = process.env.SUPER_ADMIN_EMAIL;
-  const password = process.env.SUPER_ADMIN_PASSWORD;
-  const name = process.env.SUPER_ADMIN_NAME || 'Super Admin';
-
-  if (!email || !password) {
-    console.warn('SUPER_ADMIN nao existe e SUPER_ADMIN_EMAIL/SUPER_ADMIN_PASSWORD nao definidas. Nenhum super admin criado.');
-    console.warn('Defina as variaveis de ambiente ou use: npm run create-super-admin');
+  if (emails.length === 0) {
+    console.warn('SUPER_ADMIN_EMAILS nao definido. Nenhum super admin autorizado ainda.');
     return;
   }
 
-  if (password.length < 8) {
-    console.error('SUPER_ADMIN_PASSWORD deve ter no minimo 8 caracteres.');
+  const existing = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' } });
+  if (existing) {
+    console.log(`Super admin ja existe: ${existing.email}`);
     return;
   }
 
-  const hashedPassword = await bcrypt.hash(password, 12);
-
-  await prisma.user.create({
-    data: {
-      email,
-      password: hashedPassword,
-      name,
-      role: 'SUPER_ADMIN',
-    },
-  });
-
-  console.log(`SUPER_ADMIN criado automaticamente: ${email}`);
-  console.log('IMPORTANTE: troque a senha apos o primeiro login!');
+  console.log(`Super admin whitelist: ${emails.join(', ')}`);
+  console.log('Nenhum super admin criado ainda - sera criado automaticamente no primeiro login via Google desses emails.');
 }

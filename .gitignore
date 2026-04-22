@@ -17,3 +17,6 @@ server-test.err.log
 
 .DS_Store
 Thumbs.db
+
+.claude/
+HANDOFF_*.md
