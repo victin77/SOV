@@ -1,9 +1,5 @@
 import nodemailer, { Transporter } from 'nodemailer';
-import dns from 'dns';
-
-// Railway nao tem rota IPv6 outbound funcional pro smtp.gmail.com.
-// Forcar resolucao IPv4 evita ENETUNREACH em conexoes SMTP.
-dns.setDefaultResultOrder('ipv4first');
+import { promises as dns } from 'dns';
 
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
@@ -13,24 +9,45 @@ const SMTP_PASS = process.env.SMTP_PASS;
 const FROM = process.env.SMTP_FROM || (SMTP_USER ? `SOV CRM <${SMTP_USER}>` : null);
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 
-let transporter: Transporter | null = null;
+let transporterPromise: Promise<Transporter | null> | null = null;
 
-if (SMTP_USER && SMTP_PASS) {
-  transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_SECURE,
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    socketTimeout: 15_000,
-  });
-} else {
+async function getTransporter(): Promise<Transporter | null> {
+  if (!SMTP_USER || !SMTP_PASS) return null;
+  if (transporterPromise) return transporterPromise;
+
+  transporterPromise = (async () => {
+    // Railway nao tem rota IPv6 outbound funcional. Pre-resolvemos
+    // smtp.gmail.com pra IPv4 e passamos o IP direto. Mantemos o
+    // servername pro TLS validar contra o cert do Gmail.
+    let host = SMTP_HOST;
+    try {
+      const addrs = await dns.resolve4(SMTP_HOST);
+      if (addrs.length > 0) host = addrs[0];
+    } catch (err) {
+      console.warn(`Falha ao resolver IPv4 de ${SMTP_HOST}, usando hostname:`, err);
+    }
+
+    return nodemailer.createTransport({
+      host,
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
+      auth: { user: SMTP_USER, pass: SMTP_PASS },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
+      tls: { servername: SMTP_HOST },
+    });
+  })();
+
+  return transporterPromise;
+}
+
+if (!SMTP_USER || !SMTP_PASS) {
   console.warn('SMTP_USER/SMTP_PASS nao configurados - emails ficarao em modo log-only.');
 }
 
 export function isEmailEnabled(): boolean {
-  return transporter !== null;
+  return Boolean(SMTP_USER && SMTP_PASS);
 }
 
 export function getAppUrl(): string {
@@ -38,6 +55,7 @@ export function getAppUrl(): string {
 }
 
 async function sendMail(params: { to: string; subject: string; html: string; logFallback: string }): Promise<boolean> {
+  const transporter = await getTransporter();
   if (!transporter || !FROM) {
     console.warn(`Email nao enviado (SMTP nao configurado). ${params.logFallback}`);
     return false;
