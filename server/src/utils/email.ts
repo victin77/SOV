@@ -1,4 +1,9 @@
 import nodemailer, { Transporter } from 'nodemailer';
+import dns from 'dns';
+
+// Railway nao tem rota IPv6 outbound funcional pro smtp.gmail.com.
+// Forcar resolucao IPv4 evita ENETUNREACH em conexoes SMTP.
+dns.setDefaultResultOrder('ipv4first');
 
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
