@@ -29,7 +29,13 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Security headers
-app.use(helmet({ contentSecurityPolicy: false }));
+// COOP precisa permitir popups pra o Google Identity Services conseguir
+// fazer postMessage de volta pra janela principal (senao o popup do login
+// fica em branco).
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+}));
 
 // CORS: use CORS_ORIGIN for separate frontend domains.
 // In production without CORS_ORIGIN, Railway serves frontend/backend from the same origin.
