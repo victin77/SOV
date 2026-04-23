@@ -1,8 +1,31 @@
 import { useState, useEffect } from 'react';
-import { Shield, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { Shield, ChevronLeft, ChevronRight, Filter, Calendar } from 'lucide-react';
 import { api } from '../api/client';
 import type { AuditLog } from '../types';
 import { PageLoading } from '../components/LoadingSpinner';
+
+const todayStr = () => {
+  const d = new Date();
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+};
+
+const shiftDay = (dateStr: string, days: number) => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+};
+
+const formatDayLabel = (dateStr: string) => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const today = todayStr();
+  const yesterday = shiftDay(today, -1);
+  if (dateStr === today) return 'Hoje';
+  if (dateStr === yesterday) return 'Ontem';
+  return dt.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+};
 
 const ACTION_COLORS: Record<string, string> = {
   LOGIN: 'bg-blue-100 text-blue-700',
@@ -24,12 +47,20 @@ export default function AuditPage() {
   const [loading, setLoading] = useState(true);
   const [actionFilter, setActionFilter] = useState('');
   const [entityFilter, setEntityFilter] = useState('');
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr());
 
   const load = () => {
     setLoading(true);
     const params: Record<string, string> = { page: page.toString(), limit: '30' };
     if (actionFilter) params.action = actionFilter;
     if (entityFilter) params.entity = entityFilter;
+    if (selectedDate) {
+      const [y, m, d] = selectedDate.split('-').map(Number);
+      const start = new Date(y, m - 1, d, 0, 0, 0, 0);
+      const end = new Date(y, m - 1, d, 23, 59, 59, 999);
+      params.startDate = start.toISOString();
+      params.endDate = end.toISOString();
+    }
 
     api.getAuditLogs(params)
       .then(d => { setLogs(d.logs); setTotal(d.total); setTotalPages(d.totalPages); })
@@ -37,7 +68,12 @@ export default function AuditPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, [page, actionFilter, entityFilter]);
+  useEffect(() => { load(); }, [page, actionFilter, entityFilter, selectedDate]);
+
+  const changeDay = (days: number) => { setSelectedDate(d => shiftDay(d, days)); setPage(1); };
+  const goToday = () => { setSelectedDate(todayStr()); setPage(1); };
+  const clearDate = () => { setSelectedDate(''); setPage(1); };
+  const isToday = selectedDate === todayStr();
 
   return (
     <div className="space-y-4">
@@ -45,7 +81,44 @@ export default function AuditPage() {
         <h2 className="text-xl font-bold text-gray-900">Auditoria ({total})</h2>
       </div>
 
-      <div className="card p-4 flex flex-wrap gap-3">
+      <div className="card p-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => changeDay(-1)} className="btn-secondary text-sm p-2" title="Dia anterior">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+            <Calendar className="w-4 h-4 text-gray-500" />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={e => { setSelectedDate(e.target.value); setPage(1); }}
+              max={todayStr()}
+              className="bg-transparent text-sm outline-none"
+            />
+            {selectedDate && (
+              <span className="text-sm font-medium text-gray-700 capitalize">
+                &middot; {formatDayLabel(selectedDate)}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => changeDay(1)}
+            disabled={isToday || !selectedDate}
+            className="btn-secondary text-sm p-2 disabled:opacity-50"
+            title="Proximo dia"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          {!isToday && (
+            <button onClick={goToday} className="btn-secondary text-sm px-3 py-2">Hoje</button>
+          )}
+          {selectedDate ? (
+            <button onClick={clearDate} className="text-sm text-gray-500 hover:text-gray-700 px-2">Ver todos</button>
+          ) : (
+            <button onClick={goToday} className="text-sm text-blue-600 hover:text-blue-700 px-2">Filtrar por dia</button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-3">
         <select className="input w-auto text-sm" value={actionFilter} onChange={e => { setActionFilter(e.target.value); setPage(1); }}>
           <option value="">Todas as Acoes</option>
           <option value="LOGIN">Login</option>
@@ -64,6 +137,7 @@ export default function AuditPage() {
           <option value="appointment">Compromisso</option>
           <option value="pipeline_stage">Pipeline</option>
         </select>
+        </div>
       </div>
 
       {loading ? <PageLoading /> : (
