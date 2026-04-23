@@ -1,79 +1,17 @@
-import nodemailer, { Transporter } from 'nodemailer';
-import { promises as dns } from 'dns';
+import { Resend } from 'resend';
 
-const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
-const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
-const SMTP_SECURE = (process.env.SMTP_SECURE ?? 'true') === 'true';
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
-const FROM = process.env.SMTP_FROM || (SMTP_USER ? `SOV CRM <${SMTP_USER}>` : null);
+const API_KEY = process.env.RESEND_API_KEY;
+const FROM = process.env.RESEND_FROM || 'SOV CRM <onboarding@resend.dev>';
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 
-let transporterPromise: Promise<Transporter | null> | null = null;
-
-async function getTransporter(): Promise<Transporter | null> {
-  if (!SMTP_USER || !SMTP_PASS) return null;
-  if (transporterPromise) return transporterPromise;
-
-  transporterPromise = (async () => {
-    // Railway nao tem rota IPv6 outbound funcional. Pre-resolvemos
-    // smtp.gmail.com pra IPv4 e passamos o IP direto. Mantemos o
-    // servername pro TLS validar contra o cert do Gmail.
-    let host = SMTP_HOST;
-    try {
-      const addrs = await dns.resolve4(SMTP_HOST);
-      if (addrs.length > 0) host = addrs[0];
-    } catch (err) {
-      console.warn(`Falha ao resolver IPv4 de ${SMTP_HOST}, usando hostname:`, err);
-    }
-
-    return nodemailer.createTransport({
-      host,
-      port: SMTP_PORT,
-      secure: SMTP_SECURE,
-      auth: { user: SMTP_USER, pass: SMTP_PASS },
-      connectionTimeout: 10_000,
-      greetingTimeout: 10_000,
-      socketTimeout: 15_000,
-      tls: { servername: SMTP_HOST },
-    });
-  })();
-
-  return transporterPromise;
-}
-
-if (!SMTP_USER || !SMTP_PASS) {
-  console.warn('SMTP_USER/SMTP_PASS nao configurados - emails ficarao em modo log-only.');
-}
+const resend = API_KEY ? new Resend(API_KEY) : null;
 
 export function isEmailEnabled(): boolean {
-  return Boolean(SMTP_USER && SMTP_PASS);
+  return resend !== null;
 }
 
 export function getAppUrl(): string {
   return APP_URL;
-}
-
-async function sendMail(params: { to: string; subject: string; html: string; logFallback: string }): Promise<boolean> {
-  const transporter = await getTransporter();
-  if (!transporter || !FROM) {
-    console.warn(`Email nao enviado (SMTP nao configurado). ${params.logFallback}`);
-    return false;
-  }
-
-  try {
-    const info = await transporter.sendMail({
-      from: FROM,
-      to: params.to,
-      subject: params.subject,
-      html: params.html,
-    });
-    console.log(`Email enviado para ${params.to}: messageId=${info.messageId}`);
-    return true;
-  } catch (err) {
-    console.error(`Falha ao enviar email para ${params.to}:`, err);
-    return false;
-  }
 }
 
 export async function sendPasswordResetEmail(params: {
@@ -81,12 +19,27 @@ export async function sendPasswordResetEmail(params: {
   name: string;
   resetUrl: string;
 }): Promise<boolean> {
-  return sendMail({
-    to: params.to,
-    subject: 'Redefinicao de senha - SOV CRM',
-    html: renderPasswordResetHtml(params),
-    logFallback: `Link de reset para ${params.to}: ${params.resetUrl}`,
-  });
+  if (!resend) {
+    console.warn('RESEND_API_KEY nao configurado - email nao enviado. Link:', params.resetUrl);
+    return false;
+  }
+
+  try {
+    const result = await resend.emails.send({
+      from: FROM,
+      to: params.to,
+      subject: 'Redefinicao de senha - SOV CRM',
+      html: renderPasswordResetHtml(params),
+    });
+    if (result.error) {
+      console.error('Erro ao enviar email:', result.error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Falha ao enviar email de reset:', err);
+    return false;
+  }
 }
 
 export async function sendTemporaryPasswordEmail(params: {
@@ -94,12 +47,27 @@ export async function sendTemporaryPasswordEmail(params: {
   name: string;
   temporaryPassword: string;
 }): Promise<boolean> {
-  return sendMail({
-    to: params.to,
-    subject: 'Sua senha foi redefinida - SOV CRM',
-    html: renderTemporaryPasswordHtml(params),
-    logFallback: `Senha temporaria para ${params.to}: ${params.temporaryPassword}`,
-  });
+  if (!resend) {
+    console.warn('RESEND_API_KEY nao configurado - email nao enviado. Senha temporaria:', params.temporaryPassword);
+    return false;
+  }
+
+  try {
+    const result = await resend.emails.send({
+      from: FROM,
+      to: params.to,
+      subject: 'Sua senha foi redefinida - SOV CRM',
+      html: renderTemporaryPasswordHtml(params),
+    });
+    if (result.error) {
+      console.error('Erro ao enviar email:', result.error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Falha ao enviar email de senha temporaria:', err);
+    return false;
+  }
 }
 
 function renderPasswordResetHtml(params: { name: string; resetUrl: string }): string {
