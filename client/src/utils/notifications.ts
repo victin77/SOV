@@ -60,3 +60,40 @@ export function playWhatsAppTone() {
 export function getReminderStorageKey(appointmentId: string) {
   return `crm_appointment_reminder_${appointmentId}`;
 }
+
+export function supportsNativeNotifications() {
+  return typeof window !== 'undefined' && 'Notification' in window;
+}
+
+export async function ensureNotificationPermission() {
+  if (!supportsNativeNotifications()) return 'unsupported';
+  if (Notification.permission === 'granted') return 'granted';
+  if (Notification.permission === 'denied') return 'denied';
+  try {
+    return await Notification.requestPermission();
+  } catch {
+    return 'denied';
+  }
+}
+
+export function showNativeNotification(title: string, options?: NotificationOptions & { link?: string }) {
+  if (!supportsNativeNotifications() || Notification.permission !== 'granted') return;
+
+  const { link, ...nativeOptions } = options || {};
+  try {
+    const notification = new Notification(title, {
+      icon: '/vite.svg',
+      badge: '/vite.svg',
+      ...nativeOptions,
+    });
+    if (link) {
+      notification.onclick = () => {
+        window.focus();
+        window.location.assign(link);
+        notification.close();
+      };
+    }
+  } catch {
+    // Silencioso — cai no toast/som que já existem.
+  }
+}
