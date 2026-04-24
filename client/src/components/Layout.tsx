@@ -4,7 +4,13 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { api } from '../api/client';
-import { getReminderStorageKey, playReminderTone, playWhatsAppTone } from '../utils/notifications';
+import {
+  ensureNotificationPermission,
+  getReminderStorageKey,
+  playReminderTone,
+  playWhatsAppTone,
+  showNativeNotification,
+} from '../utils/notifications';
 import {
   LayoutDashboard, Users, Target, Kanban, Calendar, Tags,
   Upload, Shield, Bell, BellRing, LogOut, Menu, Moon, Sun,
@@ -61,6 +67,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!user) return;
+    ensureNotificationPermission();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
 
     const syncNotifications = () => {
       api.getNotifications()
@@ -95,6 +106,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           if (newWhatsApp.length > 0) {
             playWhatsAppTone();
             setWhatsappToasts((current) => [...newWhatsApp, ...current].slice(0, 3));
+            for (const toast of newWhatsApp) {
+              showNativeNotification(toast.title, {
+                body: toast.message,
+                tag: `whatsapp-${toast.id}`,
+                link: toast.link,
+              });
+            }
           }
         })
         .catch(() => {});
@@ -132,6 +150,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             localStorage.setItem(storageKey, new Date().toISOString());
             playReminderTone();
             setReminderToasts((current) => [appointment, ...current].slice(0, 3));
+            showNativeNotification('Compromisso em 1 hora', {
+              body: appointmentReminderMessage(appointment),
+              tag: `appointment-${appointment.id}`,
+              requireInteraction: true,
+              link: '/appointments',
+            });
 
             try {
               await api.createNotification({
