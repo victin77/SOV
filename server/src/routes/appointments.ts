@@ -47,11 +47,28 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+function parseValidDate(value: unknown): Date | null {
+  if (value === undefined || value === null || value === '') return null;
+  const date = new Date(value as string);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 // Create appointment
 router.post('/', async (req: Request, res: Response) => {
   try {
     const { title, description, startDate, endDate, location, leadId } = req.body;
     const companyId = getCompanyIdFromRequest(req);
+
+    const parsedStart = parseValidDate(startDate);
+    const parsedEnd = parseValidDate(endDate);
+    if (!parsedStart || !parsedEnd) {
+      res.status(400).json({ error: 'Data de inicio ou fim invalida' });
+      return;
+    }
+    if (parsedEnd.getTime() < parsedStart.getTime()) {
+      res.status(400).json({ error: 'O fim do compromisso nao pode ser antes do inicio' });
+      return;
+    }
 
     const leadWhere: any = { id: leadId, companyId };
     if (req.user!.role === 'SELLER') {
@@ -67,8 +84,8 @@ router.post('/', async (req: Request, res: Response) => {
       data: {
         title,
         description,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        startDate: parsedStart,
+        endDate: parsedEnd,
         location,
         leadId,
         userId: req.user!.userId,
@@ -111,8 +128,22 @@ router.put('/:id', async (req: Request, res: Response) => {
     const data: any = {};
     if (title !== undefined) data.title = title;
     if (description !== undefined) data.description = description;
-    if (startDate) data.startDate = new Date(startDate);
-    if (endDate) data.endDate = new Date(endDate);
+    if (startDate !== undefined) {
+      const parsed = parseValidDate(startDate);
+      if (!parsed) {
+        res.status(400).json({ error: 'Data de inicio invalida' });
+        return;
+      }
+      data.startDate = parsed;
+    }
+    if (endDate !== undefined) {
+      const parsed = parseValidDate(endDate);
+      if (!parsed) {
+        res.status(400).json({ error: 'Data de fim invalida' });
+        return;
+      }
+      data.endDate = parsed;
+    }
     if (location !== undefined) data.location = location;
     if (completed !== undefined) data.completed = completed;
 

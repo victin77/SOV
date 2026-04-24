@@ -18,6 +18,11 @@ type AppointmentFormState = {
   leadId: string;
 };
 
+function toLocalInputValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function buildDefaultForm(): AppointmentFormState {
   const now = new Date();
   const later = new Date(now.getTime() + 60 * 60 * 1000);
@@ -27,8 +32,8 @@ function buildDefaultForm(): AppointmentFormState {
     description: '',
     location: '',
     leadId: '',
-    startDate: now.toISOString().slice(0, 16),
-    endDate: later.toISOString().slice(0, 16),
+    startDate: toLocalInputValue(now),
+    endDate: toLocalInputValue(later),
   };
 }
 
@@ -96,8 +101,8 @@ export default function Appointments() {
     setForm({
       title: appointment.title,
       description: appointment.description || '',
-      startDate: new Date(appointment.startDate).toISOString().slice(0, 16),
-      endDate: new Date(appointment.endDate).toISOString().slice(0, 16),
+      startDate: toLocalInputValue(new Date(appointment.startDate)),
+      endDate: toLocalInputValue(new Date(appointment.endDate)),
       location: appointment.location || '',
       leadId: appointment.leadId,
     });
@@ -108,11 +113,33 @@ export default function Appointments() {
   const handleSave = async () => {
     if (!form.title || !form.leadId) return;
 
+    if (!form.startDate || !form.endDate) {
+      alert('Preencha data e hora de inicio e fim.');
+      return;
+    }
+
+    const start = new Date(form.startDate);
+    const end = new Date(form.endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      alert('Data ou hora invalida. Confira os campos.');
+      return;
+    }
+    if (end.getTime() < start.getTime()) {
+      alert('O fim do compromisso nao pode ser antes do inicio.');
+      return;
+    }
+
+    const payload = {
+      ...form,
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+    };
+
     try {
       if (editingAppointment) {
-        await api.updateAppointment(editingAppointment.id, form);
+        await api.updateAppointment(editingAppointment.id, payload);
       } else {
-        await api.createAppointment(form);
+        await api.createAppointment(payload);
       }
 
       setModal(false);
