@@ -200,11 +200,14 @@ export async function generateRefreshToken(userId: string): Promise<string> {
 export async function rotateRefreshToken(oldToken: string): Promise<{ accessToken: string; refreshToken: string; user: AuthPayload } | null> {
   const stored = await prisma.refreshToken.findUnique({ where: { token: oldToken } });
   if (!stored || stored.expiresAt < new Date()) {
-    if (stored) await prisma.refreshToken.delete({ where: { id: stored.id } });
+    if (stored) await prisma.refreshToken.deleteMany({ where: { id: stored.id } });
     return null;
   }
 
-  await prisma.refreshToken.delete({ where: { id: stored.id } });
+  const { count } = await prisma.refreshToken.deleteMany({ where: { id: stored.id } });
+  if (count === 0) {
+    return null;
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: stored.userId },
