@@ -20,6 +20,16 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
+function formatCurrencyCompact(value: number) {
+  if (value >= 1_000_000) {
+    return `R$ ${(value / 1_000_000).toFixed(1).replace('.', ',')}M`;
+  }
+  if (value >= 10_000) {
+    return `R$ ${(value / 1_000).toFixed(0)}k`;
+  }
+  return formatCurrency(value);
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -87,7 +97,9 @@ export default function Dashboard() {
         <KpiCard
           label="Valor Pipeline"
           value={formatCurrency(kpis.pipelineValue)}
+          mobileValue={formatCurrencyCompact(kpis.pipelineValue)}
           subtitle={`Ganhos: ${formatCurrency(kpis.wonValue)}`}
+          mobileSubtitle={`Ganhos: ${formatCurrencyCompact(kpis.wonValue)}`}
           icon={DollarSign}
           color="bg-amber-500"
         />
@@ -240,30 +252,49 @@ export default function Dashboard() {
   );
 }
 
-function KpiCard({ label, value, growth, subtitle, icon: Icon, color }: {
+function KpiCard({ label, value, mobileValue, growth, subtitle, mobileSubtitle, icon: Icon, color }: {
   label: string;
   value: string | number;
+  mobileValue?: string;
   growth?: number;
   subtitle?: string;
+  mobileSubtitle?: string;
   icon: any;
   color: string;
 }) {
+  const fullValue = String(value);
   return (
-    <div className="card p-4 sm:p-6">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs sm:text-sm font-medium text-gray-500">{label}</span>
-        <div className={`w-8 h-8 sm:w-10 sm:h-10 ${color} rounded-lg flex items-center justify-center`}>
+    <div className="card p-4 sm:p-6 min-w-0">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <span className="text-xs sm:text-sm font-medium text-gray-500 min-w-0 truncate">{label}</span>
+        <div className={`w-8 h-8 sm:w-10 sm:h-10 ${color} rounded-lg flex items-center justify-center flex-shrink-0`}>
           <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
         </div>
       </div>
-      <p className="text-xl sm:text-2xl font-bold text-gray-900">{value}</p>
+      <p className="text-lg sm:text-2xl font-bold text-gray-900 break-words tabular-nums" title={fullValue}>
+        {mobileValue ? (
+          <>
+            <span className="sm:hidden">{mobileValue}</span>
+            <span className="hidden sm:inline">{value}</span>
+          </>
+        ) : value}
+      </p>
       {growth !== undefined && (
         <div className={`flex items-center gap-1 mt-1 text-xs sm:text-sm ${growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-          {growth >= 0 ? <ArrowUpRight className="w-3 h-3 sm:w-4 sm:h-4" /> : <ArrowDownRight className="w-3 h-3 sm:w-4 sm:h-4" />}
-          <span>{Math.abs(growth)}% vs mes anterior</span>
+          {growth >= 0 ? <ArrowUpRight className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" /> : <ArrowDownRight className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />}
+          <span className="truncate">{Math.abs(growth)}% vs mes anterior</span>
         </div>
       )}
-      {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
+      {subtitle && (
+        <p className="text-xs text-gray-500 mt-1 break-words" title={subtitle}>
+          {mobileSubtitle ? (
+            <>
+              <span className="sm:hidden">{mobileSubtitle}</span>
+              <span className="hidden sm:inline">{subtitle}</span>
+            </>
+          ) : subtitle}
+        </p>
+      )}
     </div>
   );
 }
