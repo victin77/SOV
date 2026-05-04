@@ -174,7 +174,7 @@ export default function Settings() {
     <div className="space-y-6 max-w-3xl">
       <h2 className="text-xl font-bold text-gray-900 dark:text-white">Meu Perfil</h2>
 
-      <div className="card p-6">
+      <div className="card p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center dark:bg-primary-500/20">
             <User className="w-6 h-6 text-primary-600 dark:text-primary-300" />
@@ -219,7 +219,7 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="card p-6">
+      <div className="card p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-6">
           {theme === 'dark'
             ? <Moon className="w-5 h-5 text-gray-400 dark:text-slate-300" />
@@ -262,7 +262,7 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="card p-6">
+      <div className="card p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-3">
           <MessageCircle className="w-5 h-5 text-gray-400 dark:text-slate-300" />
           <h3 className="font-semibold text-gray-900 dark:text-white">WhatsApp no CRM</h3>
@@ -274,7 +274,7 @@ export default function Settings() {
       </div>
 
       {canManageCompany && (
-        <div className="card p-6 space-y-6">
+        <div className="card p-4 sm:p-6 space-y-6">
           <div>
             <h3 className="font-semibold text-gray-900 dark:text-white">Empresa e Integracoes</h3>
             <p className="text-sm text-gray-600 dark:text-slate-300 mt-1">
@@ -350,7 +350,7 @@ export default function Settings() {
       )}
 
       {canDeleteAllLeads && (
-        <div className="card p-6 space-y-5 border-red-200 dark:border-red-500/30">
+        <div className="card p-4 sm:p-6 space-y-5 border-red-200 dark:border-red-500/30">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center dark:bg-red-500/15">
               <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-300" />
@@ -445,7 +445,7 @@ export default function Settings() {
         </div>
       )}
 
-      <div className="card p-6">
+      <div className="card p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-3">
           <BookOpen className="w-5 h-5 text-gray-400 dark:text-slate-300" />
           <h3 className="font-semibold text-gray-900 dark:text-white">Guia do Usuario</h3>
@@ -458,7 +458,7 @@ export default function Settings() {
         </button>
       </div>
 
-      <div className="card p-6">
+      <div className="card p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-6">
           <Lock className="w-5 h-5 text-gray-400 dark:text-slate-300" />
           <h3 className="font-semibold text-gray-900 dark:text-white">Alterar Senha</h3>

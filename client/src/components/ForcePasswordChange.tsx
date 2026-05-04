@@ -39,14 +39,14 @@ export default function ForcePasswordChange() {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+    <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur flex items-center justify-center p-4 safe-top safe-bottom overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-md my-auto">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+          <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
             <KeyRound className="w-5 h-5 text-amber-600" />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Defina uma nova senha</h2>
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Defina uma nova senha</h2>
             <p className="text-xs text-gray-500">Sua senha atual e temporaria e precisa ser trocada agora.</p>
           </div>
         </div>
@@ -83,7 +83,8 @@ export default function ForcePasswordChange() {
               <button
                 type="button"
                 onClick={() => setShowPassword(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                aria-label={showPassword ? 'Esconder senha' : 'Mostrar senha'}
+                className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-2 min-w-[40px] min-h-[40px] flex items-center justify-center"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>

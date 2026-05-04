@@ -223,10 +223,10 @@ export default function SuperAdmin() {
         </div>
 
         {/* Companies header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white">Empresas</h2>
-          <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2">
-            <Plus className="w-4 h-4" /> Nova Empresa
+          <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2 text-sm flex-shrink-0">
+            <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Nova Empresa</span><span className="sm:hidden">Nova</span>
           </button>
         </div>
 
@@ -239,26 +239,26 @@ export default function SuperAdmin() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.04 }}
-                className={`card p-5 ${!company.active ? 'opacity-60' : ''}`}
+                className={`card p-4 sm:p-5 ${!company.active ? 'opacity-60' : ''}`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                   {/* Company info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-gray-900 dark:text-white truncate">{company.name}</h3>
                       {!company.active && (
-                        <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300 rounded-full">
+                        <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300 rounded-full flex-shrink-0">
                           Inativa
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">
+                    <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5 break-words">
                       /{company.slug} &middot; Criada em {new Date(company.createdAt).toLocaleDateString('pt-BR')}
                     </p>
                   </div>
 
                   {/* Metrics */}
-                  <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-slate-300">
+                  <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-slate-300 flex-shrink-0">
                     <div className="flex items-center gap-1.5" title="Usuarios">
                       <Users className="w-4 h-4 text-gray-400" />
                       <span className="font-medium">{company._count.users}</span>
@@ -270,10 +270,10 @@ export default function SuperAdmin() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 lg:flex-nowrap">
                     <Link
                       to={`/admin/company/${company.id}`}
-                      className="text-sm px-3 py-1.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 flex items-center gap-1.5 transition-colors"
+                      className="text-sm px-3 py-2 min-h-[40px] rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 flex items-center justify-center gap-1.5 transition-colors"
                     >
                       <Eye className="w-4 h-4" />
                       Detalhes
@@ -281,7 +281,7 @@ export default function SuperAdmin() {
                     <button
                       onClick={() => handleEnterCompany(company.id)}
                       disabled={!company.active || enteringId === company.id}
-                      className="btn-primary text-sm px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50"
+                      className="btn-primary text-sm px-3 py-2 min-h-[40px] flex items-center justify-center gap-1.5 disabled:opacity-50"
                       title="Entrar no sistema desta empresa"
                     >
                       {enteringId === company.id ? (
@@ -295,7 +295,7 @@ export default function SuperAdmin() {
                     <button
                       onClick={() => handleToggleActive(company)}
                       disabled={togglingId === company.id}
-                      className={`text-sm px-3 py-1.5 rounded-xl border flex items-center gap-1.5 transition-colors ${
+                      className={`text-sm px-3 py-2 min-h-[40px] rounded-xl border flex items-center justify-center gap-1.5 transition-colors ${
                         company.active
                           ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10'
                           : 'border-green-200 text-green-600 hover:bg-green-50 dark:border-green-500/30 dark:text-green-400 dark:hover:bg-green-500/10'
@@ -308,7 +308,7 @@ export default function SuperAdmin() {
 
                     <button
                       onClick={() => handleDeleteCompany(company)}
-                      className="text-sm px-3 py-1.5 rounded-xl border border-red-300 text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/15 flex items-center gap-1.5 transition-colors"
+                      className="text-sm px-3 py-2 min-h-[40px] rounded-xl border border-red-300 text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/15 flex items-center justify-center gap-1.5 transition-colors"
                       title="Excluir empresa permanentemente"
                     >
                       <Trash2 className="w-4 h-4" />

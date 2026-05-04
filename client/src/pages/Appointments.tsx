@@ -179,20 +179,20 @@ export default function Appointments() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigateMonth(-1)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 dark:hover:text-slate-200 rounded-lg">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <button onClick={() => navigateMonth(-1)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 dark:hover:text-slate-200 rounded-lg flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white capitalize">{monthLabel}</h2>
-            <p className="text-sm text-gray-500 dark:text-slate-400">Edite compromissos e receba lembretes automáticos com 1 hora de antecedência.</p>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white capitalize truncate">{monthLabel}</h2>
+            <p className="text-sm text-gray-500 dark:text-slate-400 hidden sm:block">Edite compromissos e receba lembretes automáticos com 1 hora de antecedência.</p>
           </div>
-          <button onClick={() => navigateMonth(1)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 dark:hover:text-slate-200 rounded-lg">
+          <button onClick={() => navigateMonth(1)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 dark:hover:text-slate-200 rounded-lg flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center">
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>
-        <button onClick={openCreate} className="btn-primary flex items-center gap-2 text-sm">
-          <Plus className="w-4 h-4" /> Novo Compromisso
+        <button onClick={openCreate} className="btn-primary flex items-center justify-center gap-2 text-sm flex-shrink-0">
+          <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Novo Compromisso</span><span className="sm:hidden">Novo</span>
         </button>
       </div>
 
@@ -219,28 +219,28 @@ export default function Appointments() {
                   </div>
                 </div>
 
-                <div className="space-y-2 ml-[52px]">
+                <div className="space-y-2 sm:ml-[52px]">
                   {groupedAppointments[date].map((appointment) => (
                     <div key={appointment.id} className={`card p-4 flex items-start gap-3 ${appointment.completed ? 'opacity-60' : ''}`}>
-                      <div className={`w-1 h-full min-h-[40px] rounded-full ${appointment.completed ? 'bg-green-400' : 'bg-primary-400'}`} />
+                      <div className={`w-1 h-full min-h-[40px] rounded-full flex-shrink-0 ${appointment.completed ? 'bg-green-400' : 'bg-primary-400'}`} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h4 className={`text-sm font-medium ${appointment.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{appointment.title}</h4>
-                            {appointment.description && <p className="text-xs text-gray-500 mt-0.5">{appointment.description}</p>}
+                          <div className="min-w-0 flex-1">
+                            <h4 className={`text-sm font-medium break-words ${appointment.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{appointment.title}</h4>
+                            {appointment.description && <p className="text-xs text-gray-500 mt-0.5 break-words">{appointment.description}</p>}
                           </div>
                           <div className="flex gap-1 flex-shrink-0">
                             {!appointment.completed && (
                               <>
-                                <button onClick={() => openEdit(appointment)} className="p-1.5 text-gray-400 hover:text-blue-600 rounded" title="Editar">
+                                <button onClick={() => openEdit(appointment)} className="p-2 text-gray-400 hover:text-blue-600 rounded min-w-[40px] min-h-[40px] flex items-center justify-center" title="Editar">
                                   <Pencil className="w-4 h-4" />
                                 </button>
-                                <button onClick={() => handleComplete(appointment.id)} className="p-1.5 text-gray-400 hover:text-green-600 rounded" title="Concluir">
+                                <button onClick={() => handleComplete(appointment.id)} className="p-2 text-gray-400 hover:text-green-600 rounded min-w-[40px] min-h-[40px] flex items-center justify-center" title="Concluir">
                                   <Check className="w-4 h-4" />
                                 </button>
                               </>
                             )}
-                            <button onClick={() => handleDelete(appointment.id)} className="p-1.5 text-gray-400 hover:text-red-600 rounded" title="Remover">
+                            <button onClick={() => handleDelete(appointment.id)} className="p-2 text-gray-400 hover:text-red-600 rounded min-w-[40px] min-h-[40px] flex items-center justify-center" title="Remover">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>

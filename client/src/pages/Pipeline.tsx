@@ -214,34 +214,45 @@ export default function Pipeline() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Pipeline Kanban</h2>
-          <p className="text-sm text-gray-500">Arraste leads entre etapas e acompanhe o fechamento com mais fluidez.</p>
+      <div className="flex flex-col gap-3 mb-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start justify-between gap-3 lg:block">
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold text-gray-900">Pipeline Kanban</h2>
+            <p className="text-sm text-gray-500">Arraste leads entre etapas e acompanhe o fechamento com mais fluidez.</p>
+            <p className="text-xs text-amber-600 mt-1 lg:hidden">Dica: arraste cards no desktop. No celular, abra o lead para mover de etapa.</p>
+          </div>
+          {canManage && (
+            <button
+              onClick={() => { setStageName(''); setStageColor('#6366f1'); setStageModal({ open: true }); }}
+              className="btn-primary flex items-center gap-2 text-sm flex-shrink-0 lg:hidden"
+            >
+              <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Nova Etapa</span><span className="sm:hidden">Etapa</span>
+            </button>
+          )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 lg:gap-3">
           {user?.role !== 'SELLER' && (
-            <select className="input w-[220px]" value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)}>
+            <select className="input w-full sm:w-auto sm:min-w-[200px]" value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)}>
               <option value="">Todos os consultores</option>
               {consultants.filter((consultant) => consultant.active !== false).map((consultant) => (
                 <option key={consultant.id} value={consultant.id}>{consultant.name}</option>
               ))}
             </select>
           )}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500">De</span>
+          <div className="flex items-center gap-2 flex-1 sm:flex-initial min-w-0">
+            <span className="text-sm text-gray-500 flex-shrink-0">De</span>
             <input
               type="date"
-              className="input w-auto"
+              className="input w-full sm:w-auto"
               value={dateFromFilter}
               onChange={e => setDateFromFilter(e.target.value)}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500">Até</span>
+          <div className="flex items-center gap-2 flex-1 sm:flex-initial min-w-0">
+            <span className="text-sm text-gray-500 flex-shrink-0">Até</span>
             <input
               type="date"
-              className="input w-auto"
+              className="input w-full sm:w-auto"
               value={dateToFilter}
               onChange={e => setDateToFilter(e.target.value)}
             />
@@ -252,7 +263,7 @@ export default function Pipeline() {
                 setDateFromFilter('');
                 setDateToFilter('');
               }}
-              className="text-sm text-primary-600 hover:underline"
+              className="text-sm text-primary-600 hover:underline px-2 py-2 min-h-[40px]"
             >
               Limpar datas
             </button>
@@ -260,7 +271,7 @@ export default function Pipeline() {
           {canManage && (
             <button
               onClick={() => { setStageName(''); setStageColor('#6366f1'); setStageModal({ open: true }); }}
-              className="btn-primary flex items-center gap-2 text-sm"
+              className="btn-primary hidden lg:flex items-center gap-2 text-sm"
             >
               <Plus className="w-4 h-4" /> Nova Etapa
             </button>

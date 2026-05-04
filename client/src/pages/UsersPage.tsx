@@ -120,11 +120,11 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-900">Usuarios ({users.length})</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xl font-bold text-gray-900 truncate">Usuarios ({users.length})</h2>
         {isAdmin && (
-          <button onClick={openCreate} className="btn-primary flex items-center gap-2 text-sm">
-            <Plus className="w-4 h-4" /> Novo Usuario
+          <button onClick={openCreate} className="btn-primary flex items-center gap-2 text-sm flex-shrink-0">
+            <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Novo Usuario</span><span className="sm:hidden">Novo</span>
           </button>
         )}
       </div>
@@ -204,18 +204,18 @@ export default function UsersPage() {
       <div className="space-y-3 md:hidden">
         {users.map(u => (
           <div key={u.id} className="card p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center font-bold text-primary-600">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center font-bold text-primary-600 flex-shrink-0">
                   {u.name.charAt(0)}
                 </div>
-                <div>
-                  <p className="font-medium text-gray-900">{u.name}</p>
-                  <p className="text-xs text-gray-500">{u.email}</p>
-                  {u.whatsappNumber && <p className="text-xs text-gray-400">{u.whatsappNumber}</p>}
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-gray-900 truncate">{u.name}</p>
+                  <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                  {u.whatsappNumber && <p className="text-xs text-gray-400 truncate">{u.whatsappNumber}</p>}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <span className="badge bg-primary-100 text-primary-700 text-xs">{ROLE_LABELS[u.role]}</span>
                 <span className={`w-2 h-2 rounded-full ${u.active !== false && isUserOnline(u.lastSeenAt) ? 'bg-green-400' : 'bg-gray-400'}`} />
               </div>

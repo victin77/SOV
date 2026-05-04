@@ -144,17 +144,17 @@ export default function WhatsAppInbox() {
   if (loading) return <PageLoading />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">WhatsApp</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">WhatsApp</h1>
           <p className="text-sm text-gray-500 dark:text-slate-400">
             Caixa de entrada do CRM usando a integração oficial da Meta.
           </p>
         </div>
-        <button className="btn-secondary flex items-center gap-2" onClick={handleRefresh}>
+        <button className="btn-secondary flex items-center gap-2 flex-shrink-0" onClick={handleRefresh}>
           <RefreshCw className="w-4 h-4" />
-          Atualizar
+          <span className="hidden sm:inline">Atualizar</span>
         </button>
       </div>
 
@@ -191,8 +191,8 @@ export default function WhatsAppInbox() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[340px,minmax(0,1fr)]">
-        <div className="card p-0 overflow-hidden">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[340px,minmax(0,1fr)]">
+        <div className={`card p-0 overflow-hidden ${selectedLeadId ? 'hidden xl:block' : ''}`}>
           <div className="p-4 border-b border-gray-200 dark:border-slate-700">
             <form className="flex gap-2" onSubmit={handleSearch}>
               <div className="relative flex-1">
@@ -262,28 +262,38 @@ export default function WhatsAppInbox() {
 
           {selectedLeadId && (
             <>
-              <div className="p-4 border-b border-gray-200 dark:border-slate-700 flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {thread?.lead.name || currentConversation?.lead.name || 'Conversa'}
-                  </p>
-                  <p className="text-sm text-gray-500 dark:text-slate-400">
-                    {thread?.lead.company || currentConversation?.lead.company || thread?.lead.phone || currentConversation?.lead.phone}
-                  </p>
-                  <div className="flex items-center gap-2 mt-2">
-                    {(thread?.lead.status || currentConversation?.lead.status) && (
-                      <span className={`badge text-xs ${STATUS_COLORS[(thread?.lead.status || currentConversation?.lead.status)!]}`}>
-                        {STATUS_LABELS[(thread?.lead.status || currentConversation?.lead.status)!]}
-                      </span>
-                    )}
-                    {thread?.lead.stage?.name && (
-                      <span className="badge text-xs bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-200">{thread.lead.stage.name}</span>
-                    )}
+              <div className="p-4 border-b border-gray-200 dark:border-slate-700 flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2 min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => setSearchParams({})}
+                    className="xl:hidden p-2 -ml-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center"
+                    aria-label="Voltar a lista"
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                  </button>
+                  <div className="min-w-0">
+                    <p className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white truncate">
+                      {thread?.lead.name || currentConversation?.lead.name || 'Conversa'}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-slate-400 truncate">
+                      {thread?.lead.company || currentConversation?.lead.company || thread?.lead.phone || currentConversation?.lead.phone}
+                    </p>
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {(thread?.lead.status || currentConversation?.lead.status) && (
+                        <span className={`badge text-xs ${STATUS_COLORS[(thread?.lead.status || currentConversation?.lead.status)!]}`}>
+                          {STATUS_LABELS[(thread?.lead.status || currentConversation?.lead.status)!]}
+                        </span>
+                      )}
+                      {thread?.lead.stage?.name && (
+                        <span className="badge text-xs bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-200">{thread.lead.stage.name}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 {selectedLeadId && (
-                  <Link className="btn-secondary text-sm" to={`/leads/${selectedLeadId}`}>
-                    Abrir lead
+                  <Link className="btn-secondary text-sm flex-shrink-0" to={`/leads/${selectedLeadId}`}>
+                    <span className="hidden sm:inline">Abrir lead</span><span className="sm:hidden">Lead</span>
                   </Link>
                 )}
               </div>
@@ -327,19 +337,19 @@ export default function WhatsAppInbox() {
               <div className="p-4 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
                 <textarea
                   className="input"
-                  rows={4}
+                  rows={3}
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
                   placeholder="Digite a mensagem para o lead..."
                 />
-                <div className="flex items-center justify-between gap-3 mt-3">
-                  <p className="text-xs text-gray-500 dark:text-slate-400">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mt-3">
+                  <p className="text-xs text-gray-500 dark:text-slate-400 order-2 sm:order-1">
                     {status?.configured
                       ? 'Envio oficial pela Cloud API da Meta.'
                       : 'Sem configuração oficial, o envio abre o WhatsApp via link para você concluir manualmente.'}
                   </p>
                   <button
-                    className="btn-primary flex items-center gap-2"
+                    className="btn-primary flex items-center justify-center gap-2 order-1 sm:order-2 flex-shrink-0"
                     onClick={handleSendMessage}
                     disabled={sending || !message.trim() || !selectedLeadId}
                   >

@@ -87,19 +87,19 @@ export default function LeadDetail() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/leads')} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg">
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={() => navigate('/leads')} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center">
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{lead.name}</h1>
-            {lead.company && <p className="text-sm text-gray-500 flex items-center gap-1"><Building className="w-4 h-4" />{lead.company}</p>}
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{lead.name}</h1>
+            {lead.company && <p className="text-sm text-gray-500 flex items-center gap-1 truncate"><Building className="w-4 h-4 flex-shrink-0" /><span className="truncate">{lead.company}</span></p>}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className={`badge text-sm ${STATUS_COLORS[lead.status]}`}>{STATUS_LABELS[lead.status]}</span>
           <span className={`badge text-sm ${PRIORITY_COLORS[lead.priority]}`}>{PRIORITY_LABELS[lead.priority]}</span>
-          <button onClick={handleDelete} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+          <button onClick={handleDelete} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center">
             <Trash2 className="w-5 h-5" />
           </button>
         </div>
@@ -191,12 +191,12 @@ export default function LeadDetail() {
               onChange={e => setWhatsAppMessage(e.target.value)}
               placeholder="Digite a mensagem para o lead..."
             />
-            <div className="flex gap-3 mt-3">
-              <button className="btn-primary flex items-center gap-2" onClick={sendWhatsApp} disabled={sendingWhatsApp || !whatsAppMessage.trim()}>
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-3">
+              <button className="btn-primary flex items-center justify-center gap-2" onClick={sendWhatsApp} disabled={sendingWhatsApp || !whatsAppMessage.trim()}>
                 <Send className="w-4 h-4" />
                 {sendingWhatsApp ? 'Enviando...' : 'Enviar mensagem'}
               </button>
-              <Link to={`/whatsapp?leadId=${lead.id}`} className="btn-secondary">
+              <Link to={`/whatsapp?leadId=${lead.id}`} className="btn-secondary text-center">
                 Abrir inbox
               </Link>
             </div>
@@ -206,7 +206,7 @@ export default function LeadDetail() {
           <div className="card p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-900">Etiquetas</h3>
-              <button onClick={openTagModal} className="text-primary-600 hover:text-primary-700 text-sm">
+              <button onClick={openTagModal} className="p-2 -mr-2 text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center">
                 <Edit2 className="w-4 h-4" />
               </button>
             </div>

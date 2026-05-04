@@ -231,26 +231,26 @@ export default function SuperAdminCompany() {
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
       {/* Header */}
       <header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <Link
               to="/admin"
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition-colors flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center"
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <div>
-              <span className="font-bold text-lg text-gray-900 dark:text-white">{company.name}</span>
-              <span className="text-xs text-gray-500 dark:text-slate-400 block leading-none">/{company.slug}</span>
+            <div className="min-w-0">
+              <span className="font-bold text-base sm:text-lg text-gray-900 dark:text-white truncate block">{company.name}</span>
+              <span className="text-xs text-gray-500 dark:text-slate-400 block leading-none truncate">/{company.slug}</span>
             </div>
             {!company.active && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300 rounded-full">
+              <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300 rounded-full flex-shrink-0">
                 Inativa
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={handleEnter}
               disabled={!company.active || enteringCompany}
@@ -261,11 +261,11 @@ export default function SuperAdminCompany() {
               ) : (
                 <LogIn className="w-4 h-4" />
               )}
-              Entrar no CRM
+              <span className="hidden sm:inline">Entrar no CRM</span><span className="sm:hidden">Entrar</span>
             </button>
             <button
               onClick={() => { logout(); navigate('/login'); }}
-              className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"
+              className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"
               title="Sair"
             >
               <LogOut className="w-5 h-5" />
@@ -288,15 +288,15 @@ export default function SuperAdminCompany() {
         )}
 
         {/* Users */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Usuarios ({company.users?.length ?? 0})</h2>
-          <button onClick={() => setShowCreateUser(true)} className="btn-primary text-sm flex items-center gap-1.5">
-            <Plus className="w-4 h-4" /> Novo Usuario
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white truncate">Usuarios ({company.users?.length ?? 0})</h2>
+          <button onClick={() => setShowCreateUser(true)} className="btn-primary text-sm flex items-center gap-1.5 flex-shrink-0">
+            <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Novo Usuario</span><span className="sm:hidden">Novo</span>
           </button>
         </div>
 
-        <div className="card overflow-hidden">
-          <table className="w-full">
+        <div className="card overflow-x-auto">
+          <table className="w-full min-w-[480px]">
             <thead>
               <tr className="border-b border-gray-200 dark:border-slate-700 text-left">
                 <th className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-slate-400 uppercase">Nome</th>
