@@ -95,27 +95,27 @@ export default function Dashboard() {
 
       {/* Conversion + Trend */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="card p-6">
+        <div className="card p-4 sm:p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-4">Taxa de Conversao</h3>
           <div className="text-center">
-            <p className="text-4xl font-bold text-primary-600">{kpis.conversionRate}%</p>
+            <p className="text-3xl sm:text-4xl font-bold text-primary-600">{kpis.conversionRate}%</p>
             <p className="text-sm text-gray-500 mt-1">Leads convertidos este mes</p>
-            <div className="mt-4 flex justify-center gap-6 text-sm">
+            <div className="mt-4 flex justify-center gap-4 sm:gap-6 text-sm flex-wrap">
               <span className="text-green-600 font-medium">{kpis.wonThisMonth} ganhos</span>
               <span className="text-red-600 font-medium">{kpis.lostThisMonth} perdidos</span>
             </div>
           </div>
         </div>
 
-        <div className="card p-6 lg:col-span-2">
+        <div className="card p-4 sm:p-6 lg:col-span-2">
           <h3 className="text-sm font-medium text-gray-500 mb-4">Tendencia (12 meses)</h3>
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={trend}>
+            <LineChart data={trend} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#94a3b8" />
-              <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="#94a3b8" />
+              <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
               <Tooltip />
-              <Legend />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
               <Line type="monotone" dataKey="created" stroke="#6366f1" name="Criados" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="won" stroke="#22c55e" name="Ganhos" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="lost" stroke="#ef4444" name="Perdidos" strokeWidth={2} dot={false} />
@@ -126,40 +126,41 @@ export default function Dashboard() {
 
       {/* Charts row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="card p-6">
+        <div className="card p-4 sm:p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-4">Por Status</h3>
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
-              <Pie data={charts.leadsByStatus} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={80} label={({ status, count }) => `${status}: ${count}`}>
+              <Pie data={charts.leadsByStatus} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={70} label={({ count }) => count}>
                 {charts.leadsByStatus.map((_, i) => (
                   <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="card p-6">
+        <div className="card p-4 sm:p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-4">Por Fonte</h3>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={charts.leadsBySource} layout="vertical">
+            <BarChart data={charts.leadsBySource} layout="vertical" margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis type="number" tick={{ fontSize: 12 }} />
-              <YAxis dataKey="source" type="category" tick={{ fontSize: 11 }} width={80} />
+              <XAxis type="number" tick={{ fontSize: 11 }} />
+              <YAxis dataKey="source" type="category" tick={{ fontSize: 10 }} width={70} />
               <Tooltip />
               <Bar dataKey="count" fill="#6366f1" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="card p-6">
+        <div className="card p-4 sm:p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-4">Por Prioridade</h3>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={charts.leadsByPriority}>
+            <BarChart data={charts.leadsByPriority} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="priority" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
+              <XAxis dataKey="priority" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
               <Tooltip />
               <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -170,13 +171,13 @@ export default function Dashboard() {
       {/* Bottom row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Top Sellers */}
-        <div className="card p-6">
+        <div className="card p-4 sm:p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-4">Top Vendedores</h3>
           <div className="space-y-3">
             {topSellers.slice(0, 5).map((s, i) => (
-              <div key={s.id} className="flex items-center gap-3">
-                <span className="text-sm font-bold text-gray-400 w-5">{i + 1}</span>
-                <div className="relative">
+              <div key={s.id} className="flex items-center gap-2 sm:gap-3">
+                <span className="text-sm font-bold text-gray-400 w-5 flex-shrink-0">{i + 1}</span>
+                <div className="relative flex-shrink-0">
                   <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center text-sm font-bold text-primary-600">
                     {s.name.charAt(0)}
                   </div>
@@ -184,11 +185,11 @@ export default function Dashboard() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{s.name}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 truncate">
                     {s.totalLeads} leads | {s.wonThisMonth} ganhos | {isUserOnline(s.lastSeenAt) ? 'online' : 'offline'}
                   </p>
                 </div>
-                <span className="text-sm font-semibold text-green-600">{formatCurrency(s.wonValue)}</span>
+                <span className="text-xs sm:text-sm font-semibold text-green-600 flex-shrink-0">{formatCurrency(s.wonValue)}</span>
               </div>
             ))}
             {topSellers.length === 0 && <p className="text-sm text-gray-400">Sem dados</p>}
@@ -196,15 +197,15 @@ export default function Dashboard() {
         </div>
 
         {/* Recent Activities */}
-        <div className="card p-6">
+        <div className="card p-4 sm:p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-4">Atividades Recentes</h3>
           <div className="space-y-3 max-h-[300px] overflow-y-auto">
             {recentActivities.slice(0, 10).map(a => (
               <div key={a.id} className="flex items-start gap-3">
                 <Activity className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm text-gray-700">{a.description}</p>
-                  <p className="text-xs text-gray-400">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-gray-700 break-words">{a.description}</p>
+                  <p className="text-xs text-gray-400 break-words">
                     {a.lead?.name && <Link to={`/leads/${a.leadId}`} className="text-primary-600 hover:underline">{a.lead.name}</Link>}
                     {' '}&middot; {new Date(a.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </p>
@@ -216,15 +217,15 @@ export default function Dashboard() {
         </div>
 
         {/* Upcoming Appointments */}
-        <div className="card p-6">
+        <div className="card p-4 sm:p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-4">Proximos Compromissos</h3>
           <div className="space-y-3 max-h-[300px] overflow-y-auto">
             {upcomingAppointments.map(a => (
               <div key={a.id} className="flex items-start gap-3">
                 <Calendar className="w-4 h-4 text-primary-500 mt-0.5 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900">{a.title}</p>
-                  <p className="text-xs text-gray-500">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900 break-words">{a.title}</p>
+                  <p className="text-xs text-gray-500 break-words">
                     {a.lead?.name && <span>{a.lead.name} &middot; </span>}
                     {new Date(a.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </p>

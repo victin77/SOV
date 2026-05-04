@@ -171,35 +171,35 @@ export default function Leads() {
         </div>
 
         {showFilters && (
-          <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-gray-200">
-            <select className="input w-auto" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-3 mt-3 pt-3 border-t border-gray-200">
+            <select className="input w-full lg:w-auto" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
               <option value="">Todos os Status</option>
               {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
-            <select className="input w-auto" value={priorityFilter} onChange={e => { setPriorityFilter(e.target.value); setPage(1); }}>
+            <select className="input w-full lg:w-auto" value={priorityFilter} onChange={e => { setPriorityFilter(e.target.value); setPage(1); }}>
               <option value="">Todas Prioridades</option>
               {Object.entries(PRIORITY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
             {user?.role !== 'SELLER' && (
-              <select className="input w-auto" value={assignedFilter} onChange={e => { setAssignedFilter(e.target.value); setPage(1); }}>
+              <select className="input w-full lg:w-auto" value={assignedFilter} onChange={e => { setAssignedFilter(e.target.value); setPage(1); }}>
                 <option value="">Todos os consultores</option>
                 {users.filter(u => u.active !== false).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             )}
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">De</span>
+              <span className="text-sm text-gray-500 flex-shrink-0">De</span>
               <input
                 type="date"
-                className="input w-auto"
+                className="input w-full lg:w-auto"
                 value={dateFromFilter}
                 onChange={e => { setDateFromFilter(e.target.value); setPage(1); }}
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">Até</span>
+              <span className="text-sm text-gray-500 flex-shrink-0">Até</span>
               <input
                 type="date"
-                className="input w-auto"
+                className="input w-full lg:w-auto"
                 value={dateToFilter}
                 onChange={e => { setDateToFilter(e.target.value); setPage(1); }}
               />
@@ -214,7 +214,7 @@ export default function Leads() {
                   setDateToFilter('');
                   setPage(1);
                 }}
-                className="text-sm text-primary-600 hover:underline"
+                className="text-sm text-primary-600 hover:underline col-span-full lg:col-auto px-2 py-2 min-h-[40px] text-left"
               >
                 Limpar filtros
               </button>
@@ -286,25 +286,25 @@ export default function Leads() {
           <div className="space-y-3 md:hidden">
             {leads.map(lead => (
               <div key={lead.id} className="card p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <Link to={`/leads/${lead.id}`}>
-                    <h3 className="font-medium text-gray-900">{lead.name}</h3>
-                    {lead.company && <p className="text-xs text-gray-500 flex items-center gap-1"><Building className="w-3 h-3" />{lead.company}</p>}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <Link to={`/leads/${lead.id}`} className="min-w-0 flex-1">
+                    <h3 className="font-medium text-gray-900 truncate">{lead.name}</h3>
+                    {lead.company && <p className="text-xs text-gray-500 flex items-center gap-1 truncate"><Building className="w-3 h-3 flex-shrink-0" /><span className="truncate">{lead.company}</span></p>}
                   </Link>
-                  <span className={`badge text-xs ${STATUS_COLORS[lead.status]}`}>{STATUS_LABELS[lead.status]}</span>
+                  <span className={`badge text-xs ${STATUS_COLORS[lead.status]} flex-shrink-0`}>{STATUS_LABELS[lead.status]}</span>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-3">
-                  {lead.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{lead.email}</span>}
-                  {lead.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{lead.phone}</span>}
+                  {lead.email && <span className="flex items-center gap-1 min-w-0"><Mail className="w-3 h-3 flex-shrink-0" /><span className="truncate">{lead.email}</span></span>}
+                  {lead.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3 flex-shrink-0" />{lead.phone}</span>}
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
                     <span className={`badge text-xs ${PRIORITY_COLORS[lead.priority]}`}>{PRIORITY_LABELS[lead.priority]}</span>
                     {lead.value && <span className="text-sm font-medium text-green-600">{formatCurrency(lead.value)}</span>}
                   </div>
-                  <div className="flex gap-1">
-                    <button onClick={() => openEdit(lead)} className="p-1.5 text-gray-400 hover:text-blue-600 rounded"><Edit2 className="w-4 h-4" /></button>
-                    <button onClick={() => handleDelete(lead.id)} className="p-1.5 text-gray-400 hover:text-red-600 rounded"><Trash2 className="w-4 h-4" /></button>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button onClick={() => openEdit(lead)} className="p-2 text-gray-400 hover:text-blue-600 rounded min-w-[40px] min-h-[40px] flex items-center justify-center"><Edit2 className="w-4 h-4" /></button>
+                    <button onClick={() => handleDelete(lead.id)} className="p-2 text-gray-400 hover:text-red-600 rounded min-w-[40px] min-h-[40px] flex items-center justify-center"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
               </div>

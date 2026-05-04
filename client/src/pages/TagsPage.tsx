@@ -61,28 +61,28 @@ export default function TagsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-900">Etiquetas ({tags.length})</h2>
-        <button onClick={openCreate} className="btn-primary flex items-center gap-2 text-sm">
-          <Plus className="w-4 h-4" /> Nova Etiqueta
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xl font-bold text-gray-900 truncate">Etiquetas ({tags.length})</h2>
+        <button onClick={openCreate} className="btn-primary flex items-center gap-2 text-sm flex-shrink-0">
+          <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Nova Etiqueta</span><span className="sm:hidden">Nova</span>
         </button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {tags.map(tag => (
-          <div key={tag.id} className="card p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
+          <div key={tag.id} className="card p-4 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="font-medium text-gray-900 truncate">{tag.name}</p>
                 <p className="text-xs text-gray-500">{tag._count?.leads || 0} leads</p>
               </div>
             </div>
             <div className="flex gap-1 flex-shrink-0">
-              <button onClick={() => openEdit(tag)} className="p-1.5 text-gray-400 hover:text-blue-600 rounded">
+              <button onClick={() => openEdit(tag)} className="p-2 text-gray-400 hover:text-blue-600 rounded min-w-[40px] min-h-[40px] flex items-center justify-center">
                 <Edit2 className="w-4 h-4" />
               </button>
-              <button onClick={() => handleDelete(tag.id)} className="p-1.5 text-gray-400 hover:text-red-600 rounded">
+              <button onClick={() => handleDelete(tag.id)} className="p-2 text-gray-400 hover:text-red-600 rounded min-w-[40px] min-h-[40px] flex items-center justify-center">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
@@ -108,9 +108,9 @@ export default function TagsPage() {
               <input type="color" value={color} onChange={e => setColor(e.target.value)} className="w-10 h-10 rounded border cursor-pointer" />
               <span className="text-sm text-gray-500">{color}</span>
             </div>
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-2 mt-2 flex-wrap">
               {['#6366f1', '#06b6d4', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#64748b'].map(c => (
-                <button key={c} onClick={() => setColor(c)} className={`w-7 h-7 rounded-full border-2 ${color === c ? 'border-gray-900' : 'border-transparent'}`} style={{ backgroundColor: c }} />
+                <button key={c} type="button" onClick={() => setColor(c)} className={`w-9 h-9 rounded-full border-2 ${color === c ? 'border-gray-900' : 'border-transparent'}`} style={{ backgroundColor: c }} />
               ))}
             </div>
           </div>

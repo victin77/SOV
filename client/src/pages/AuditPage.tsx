@@ -83,20 +83,20 @@ export default function AuditPage() {
 
       <div className="card p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={() => changeDay(-1)} className="btn-secondary text-sm p-2" title="Dia anterior">
+          <button onClick={() => changeDay(-1)} className="btn-secondary text-sm p-2 min-w-[40px] min-h-[40px] flex items-center justify-center" title="Dia anterior">
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
-            <Calendar className="w-4 h-4 text-gray-500" />
+          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200 flex-1 sm:flex-initial min-w-0">
+            <Calendar className="w-4 h-4 text-gray-500 flex-shrink-0" />
             <input
               type="date"
               value={selectedDate}
               onChange={e => { setSelectedDate(e.target.value); setPage(1); }}
               max={todayStr()}
-              className="bg-transparent text-sm outline-none"
+              className="bg-transparent text-base sm:text-sm outline-none min-w-0 flex-1"
             />
             {selectedDate && (
-              <span className="text-sm font-medium text-gray-700 capitalize">
+              <span className="text-sm font-medium text-gray-700 capitalize hidden sm:inline">
                 &middot; {formatDayLabel(selectedDate)}
               </span>
             )}
@@ -104,39 +104,42 @@ export default function AuditPage() {
           <button
             onClick={() => changeDay(1)}
             disabled={isToday || !selectedDate}
-            className="btn-secondary text-sm p-2 disabled:opacity-50"
+            className="btn-secondary text-sm p-2 disabled:opacity-50 min-w-[40px] min-h-[40px] flex items-center justify-center"
             title="Proximo dia"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
           {!isToday && (
-            <button onClick={goToday} className="btn-secondary text-sm px-3 py-2">Hoje</button>
+            <button onClick={goToday} className="btn-secondary text-sm px-3 py-2 min-h-[40px]">Hoje</button>
           )}
           {selectedDate ? (
-            <button onClick={clearDate} className="text-sm text-gray-500 hover:text-gray-700 px-2">Ver todos</button>
+            <button onClick={clearDate} className="text-sm text-gray-500 hover:text-gray-700 px-2 py-2 min-h-[40px]">Ver todos</button>
           ) : (
-            <button onClick={goToday} className="text-sm text-blue-600 hover:text-blue-700 px-2">Filtrar por dia</button>
+            <button onClick={goToday} className="text-sm text-blue-600 hover:text-blue-700 px-2 py-2 min-h-[40px]">Filtrar por dia</button>
           )}
         </div>
-        <div className="flex flex-wrap gap-3">
-        <select className="input w-auto text-sm" value={actionFilter} onChange={e => { setActionFilter(e.target.value); setPage(1); }}>
-          <option value="">Todas as Acoes</option>
-          <option value="LOGIN">Login</option>
-          <option value="CREATE_LEAD">Criar Lead</option>
-          <option value="UPDATE_LEAD">Atualizar Lead</option>
-          <option value="DELETE_LEAD">Remover Lead</option>
-          <option value="MOVE_LEAD">Mover Lead</option>
-          <option value="CREATE_APPOINTMENT">Criar Compromisso</option>
-          <option value="IMPORT_LEADS">Importar Leads</option>
-          <option value="CREATE_USER">Criar Usuario</option>
-        </select>
-        <select className="input w-auto text-sm" value={entityFilter} onChange={e => { setEntityFilter(e.target.value); setPage(1); }}>
-          <option value="">Todas Entidades</option>
-          <option value="lead">Lead</option>
-          <option value="user">Usuario</option>
-          <option value="appointment">Compromisso</option>
-          <option value="pipeline_stage">Pipeline</option>
-        </select>
+        {selectedDate && (
+          <p className="text-sm font-medium text-gray-700 capitalize sm:hidden">{formatDayLabel(selectedDate)}</p>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-3">
+          <select className="input w-full lg:w-auto text-sm" value={actionFilter} onChange={e => { setActionFilter(e.target.value); setPage(1); }}>
+            <option value="">Todas as Acoes</option>
+            <option value="LOGIN">Login</option>
+            <option value="CREATE_LEAD">Criar Lead</option>
+            <option value="UPDATE_LEAD">Atualizar Lead</option>
+            <option value="DELETE_LEAD">Remover Lead</option>
+            <option value="MOVE_LEAD">Mover Lead</option>
+            <option value="CREATE_APPOINTMENT">Criar Compromisso</option>
+            <option value="IMPORT_LEADS">Importar Leads</option>
+            <option value="CREATE_USER">Criar Usuario</option>
+          </select>
+          <select className="input w-full lg:w-auto text-sm" value={entityFilter} onChange={e => { setEntityFilter(e.target.value); setPage(1); }}>
+            <option value="">Todas Entidades</option>
+            <option value="lead">Lead</option>
+            <option value="user">Usuario</option>
+            <option value="appointment">Compromisso</option>
+            <option value="pipeline_stage">Pipeline</option>
+          </select>
         </div>
       </div>
 

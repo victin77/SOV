@@ -213,17 +213,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Impersonation banner */}
       {impersonation.active && (
-        <div className="bg-indigo-600 text-white px-4 py-2 flex items-center justify-between z-[60] relative">
-          <div className="flex items-center gap-2 text-sm">
-            <Shield className="w-4 h-4" />
-            <span>Voce esta dentro de: <strong>{impersonation.companyName}</strong></span>
+        <div className="bg-indigo-600 text-white px-3 sm:px-4 py-2 flex items-center justify-between gap-2 z-[60] relative">
+          <div className="flex items-center gap-2 text-sm min-w-0">
+            <Shield className="w-4 h-4 flex-shrink-0" />
+            <span className="truncate"><span className="hidden sm:inline">Voce esta dentro de: </span><strong>{impersonation.companyName}</strong></span>
           </div>
           <button
             onClick={handleExitCompany}
-            className="flex items-center gap-1.5 text-sm font-medium bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 text-sm font-medium bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
           >
             <ArrowLeft className="w-4 h-4" />
-            Voltar ao painel
+            <span className="hidden sm:inline">Voltar ao painel</span><span className="sm:hidden">Voltar</span>
           </button>
         </div>
       )}
@@ -395,16 +395,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </motion.aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30 backdrop-blur">
-          <div className="flex items-center gap-3">
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-4 lg:px-6 sticky top-0 z-30 backdrop-blur">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden text-gray-500 hover:text-gray-700"
+              className="lg:hidden p-2 -ml-2 text-gray-500 hover:text-gray-700"
+              aria-label="Abrir menu"
             >
               <Menu className="w-6 h-6" />
             </button>
-            <div>
-              <h1 className="text-lg font-semibold text-gray-900 hidden sm:block">{activePageLabel}</h1>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{activePageLabel}</h1>
               <p className="hidden lg:block text-xs text-gray-500">Acompanhe leads, agenda e consultores em tempo real.</p>
             </div>
           </div>

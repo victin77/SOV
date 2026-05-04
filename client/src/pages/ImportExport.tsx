@@ -260,7 +260,7 @@ export default function ImportExport() {
         </div>
       )}
 
-      <div className="card p-6">
+      <div className="card p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-4">
           <Download className="w-6 h-6 text-primary-600" />
           <h3 className="text-lg font-semibold text-gray-900">Exportar Leads</h3>
@@ -278,9 +278,9 @@ export default function ImportExport() {
         </div>
       </div>
 
-      <div className="card p-6 space-y-4">
+      <div className="card p-4 sm:p-6 space-y-4">
         <div className="flex items-center gap-3">
-          <Upload className="w-6 h-6 text-primary-600" />
+          <Upload className="w-6 h-6 text-primary-600 flex-shrink-0" />
           <h3 className="text-lg font-semibold text-gray-900">Importar Leads</h3>
         </div>
 
@@ -363,7 +363,7 @@ export default function ImportExport() {
       </div>
 
       {preview && (
-        <div className="card p-6 space-y-5">
+        <div className="card p-4 sm:p-6 space-y-5">
           <div className="flex items-center gap-3">
             <Eye className="w-6 h-6 text-primary-600" />
             <div>
