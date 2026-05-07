@@ -5,6 +5,7 @@
 @layer base {
   html {
     color-scheme: light;
+    -webkit-text-size-adjust: 100%;
   }
 
   html.dark {
@@ -13,25 +14,30 @@
 
   body {
     @apply text-gray-900 antialiased bg-gray-50 transition-colors duration-300;
+    -webkit-tap-highlight-color: transparent;
   }
 
   html.dark body {
     @apply bg-slate-950 text-slate-100;
   }
+
+  button, [role="button"] {
+    touch-action: manipulation;
+  }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-primary-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-primary-600 text-white px-4 py-2 min-h-[40px] rounded-lg font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-secondary {
-    @apply bg-white text-gray-700 px-4 py-2 rounded-lg font-medium border border-gray-300 hover:bg-gray-50 transition-colors;
+    @apply bg-white text-gray-700 px-4 py-2 min-h-[40px] rounded-lg font-medium border border-gray-300 hover:bg-gray-50 transition-colors;
   }
   .btn-danger {
-    @apply bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors;
+    @apply bg-red-600 text-white px-4 py-2 min-h-[40px] rounded-lg font-medium hover:bg-red-700 transition-colors;
   }
   .input {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-shadow;
+    @apply w-full px-3 py-2 min-h-[40px] border border-gray-300 rounded-lg text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-shadow;
   }
   .label {
     @apply block text-sm font-medium text-gray-700 mb-1;
@@ -41,6 +47,22 @@
   }
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
@@ -81,3 +103,69 @@ html.dark .card {
 }
 html.dark ::-webkit-scrollbar-thumb { background: #334155; }
 html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* ──────────────────────────────────────────────────────────────
+   Theme transition — circle reveal a partir do ponto clicado.
+   Usa a View Transitions API (Chrome/Edge/Safari TP). Em
+   navegadores sem suporte, a troca acontece sem animação.
+   ────────────────────────────────────────────────────────────── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+/* Light → Dark: o NOVO (escuro) cresce a partir do clique */
+html[data-theme-transition='dark']::view-transition-new(root) {
+  animation: theme-ripple-in 600ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+html[data-theme-transition='dark']::view-transition-old(root) {
+  animation: theme-fade-hold 600ms linear forwards;
+}
+
+/* Dark → Light: o ANTIGO (escuro) encolhe pro clique, revelando o claro */
+html[data-theme-transition='light']::view-transition-new(root) {
+  animation: theme-fade-hold 600ms linear forwards;
+  z-index: 1;
+}
+html[data-theme-transition='light']::view-transition-old(root) {
+  animation: theme-ripple-out 600ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  z-index: 2;
+}
+
+@keyframes theme-ripple-in {
+  from {
+    clip-path: circle(0 at var(--theme-ripple-x, 50%) var(--theme-ripple-y, 50%));
+  }
+  to {
+    clip-path: circle(var(--theme-ripple-r, 150vmax) at var(--theme-ripple-x, 50%) var(--theme-ripple-y, 50%));
+  }
+}
+
+@keyframes theme-ripple-out {
+  from {
+    clip-path: circle(var(--theme-ripple-r, 150vmax) at var(--theme-ripple-x, 50%) var(--theme-ripple-y, 50%));
+  }
+  to {
+    clip-path: circle(0 at var(--theme-ripple-x, 50%) var(--theme-ripple-y, 50%));
+  }
+}
+
+@keyframes theme-fade-hold {
+  from { opacity: 1; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
