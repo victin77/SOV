@@ -22,7 +22,8 @@ Guia completo de como usar o CRM Leads. Escrito de forma simples pra qualquer pe
 14. [Configuracoes](#configuracoes)
 15. [Painel do Super Admin](#painel-do-super-admin)
 16. [Como configurar o WhatsApp](#como-configurar-o-whatsapp)
-17. [Dicas de uso](#dicas-de-uso)
+17. [Como configurar o Google Calendar](#como-configurar-o-google-calendar)
+18. [Dicas de uso](#dicas-de-uso)
 
 ---
 
@@ -34,6 +35,7 @@ CRM Leads e um sistema de gestao comercial. Ele serve pra:
 - **Acompanhar o progresso** de cada negociacao pelo pipeline
 - **Conversar com clientes** pelo WhatsApp direto do sistema
 - **Agendar compromissos** e receber lembretes
+- **Sincronizar a agenda com o Google Calendar** de cada usuario
 - **Ver metricas** de desempenho da equipe no dashboard
 - **Importar/exportar** dados em JSON ou Excel
 
@@ -222,8 +224,20 @@ O sistema te avisa automaticamente **1 hora antes** de cada compromisso com:
 - Um **toast na tela** (caixinha no canto superior direito)
 - Uma **notificacao** salva no sino
 
+### Sincronizacao com Google Calendar
+
+Se voce conectar sua conta Google em **Configuracoes > Google Calendar**, todo compromisso criado, atualizado ou apagado no CRM e refletido automaticamente no seu Google Calendar pessoal.
+
+- A sincronizacao e **por usuario**: cada vendedor conecta a propria conta Google e ve os compromissos no SEU calendario
+- Os eventos vao pro **calendario principal** (primary) do Google
+- Se o lead tiver **email cadastrado**, ele e adicionado como convidado no evento (recebe convite por email)
+- Compromissos criados **antes** de conectar o Google sao sincronizados na primeira vez que voce edita-los
+- Lembretes do Google sao os padrao da sua conta (nao substituem os lembretes internos do CRM)
+
+Veja o passo a passo em [Como configurar o Google Calendar](#como-configurar-o-google-calendar).
+
 ### Dica
-Sempre associe o compromisso a um lead. Assim voce tem o historico completo de interacoes com aquele contato.
+Sempre associe o compromisso a um lead. Assim voce tem o historico completo de interacoes com aquele contato — e, se o lead tiver email, ele recebe o convite no Google Agenda automaticamente.
 
 ---
 
@@ -351,6 +365,12 @@ Acesse clicando no seu nome > **Configuracoes**.
 - Digite a senha atual
 - Digite a nova senha (minimo 6 caracteres)
 - Confirme a nova senha
+
+### Google Calendar (qualquer usuario)
+- **Conectar com Google** — vincula sua conta Google pra sincronizar a agenda do CRM com o Google Calendar
+- **Desconectar** — quebra o vinculo e para a sincronizacao (compromissos ja existentes no Google nao sao apagados)
+- O cartao mostra a **data em que voce conectou** quando ja existe um vinculo ativo
+- Veja [Como configurar o Google Calendar](#como-configurar-o-google-calendar)
 
 ### Empresa e integracoes (somente Admin)
 - **Nome da empresa** — aparece na sidebar e no sistema
@@ -486,6 +506,138 @@ Tudo bem! O CRM funciona normalmente sem a Cloud API. Quando voce envia uma mens
 
 ---
 
+## Como configurar o Google Calendar
+
+Aqui voce aprende a sincronizar a agenda do CRM com o seu Google Calendar pessoal. Tem **duas partes**: a configuracao **uma vez** no servidor (feita pelo Admin/dono da plataforma) e a conexao **individual** que cada usuario faz na propria conta.
+
+### Pra que serve
+
+- Ver os compromissos do CRM dentro do **Google Agenda** (no celular, no computador, no Outlook que sincroniza com Google, etc.)
+- Receber lembretes do **proprio Google** alem dos lembretes internos do CRM
+- Quando o lead tem email, ele recebe **convite** no email com horario, descricao e local
+- Tudo que voce **criar, editar ou apagar** no CRM e refletido no Google em segundos
+
+### Parte 1 — Configuracao do servidor (uma vez por instalacao)
+
+Esta parte so precisa ser feita uma vez, pelo Admin que cuida do servidor. Depois disso, qualquer usuario consegue conectar a propria conta sem mexer em nada disso.
+
+#### Passo 1: Criar projeto no Google Cloud Console
+
+1. Acesse **console.cloud.google.com**
+2. Faca login com uma conta Google
+3. No topo, clique no seletor de projeto e em **"Novo projeto"**
+4. De um nome (ex: "SOV CRM") e crie
+
+#### Passo 2: Ativar a API do Google Calendar
+
+1. No menu lateral, va em **APIs e Servicos > Biblioteca**
+2. Procure por **"Google Calendar API"**
+3. Clique em **"Ativar"**
+
+#### Passo 3: Configurar a tela de consentimento (OAuth consent screen)
+
+1. Va em **APIs e Servicos > Tela de consentimento OAuth**
+2. Escolha **"Externo"** (a menos que sua empresa tenha Google Workspace)
+3. Preencha:
+   - **Nome do aplicativo**: SOV CRM (ou o nome que voce usa)
+   - **Email de suporte**: o seu
+   - **Email do desenvolvedor**: o seu
+4. Em **Escopos**, adicione: `https://www.googleapis.com/auth/calendar.events`
+5. Em **Usuarios de teste** (se ainda em modo Teste), adicione os emails que vao usar antes da publicacao
+6. Salve
+
+#### Passo 4: Criar credencial OAuth
+
+1. Va em **APIs e Servicos > Credenciais**
+2. Clique em **"+ Criar credenciais" > "ID do cliente OAuth"**
+3. Escolha **"Aplicativo da Web"**
+4. Em **URIs de redirecionamento autorizados**, adicione:
+   - Em **desenvolvimento local**: `http://localhost:3001/api/auth/google-calendar/callback`
+   - Em **producao**: `https://seudominio.com/api/auth/google-calendar/callback`
+5. Salve. Anote o **Client ID** e o **Client Secret**
+
+#### Passo 5: Colocar as credenciais no `.env` do servidor
+
+No arquivo `server/.env`, adicione:
+
+```
+GOOGLE_CLIENT_ID="seu-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="seu-client-secret"
+APP_URL="http://localhost:5173"
+```
+
+Em producao, ajuste `APP_URL` pro dominio real do CRM (ex: `https://crm.suaempresa.com`).
+
+Se voce precisar de uma URL de callback diferente da padrao (ex: backend em subdominio separado), defina tambem:
+
+```
+GOOGLE_CALENDAR_REDIRECT_URI="https://api.suaempresa.com/api/auth/google-calendar/callback"
+```
+
+Reinicie o servidor (`npm run dev` ou `npm start`) pra aplicar.
+
+#### Como saber se o servidor reconheceu
+
+No CRM, vai em **Configuracoes**. Se aparecer o cartao **"Google Calendar"** com botao **"Conectar com Google"**, esta tudo certo. Se aparecer "Integracao com Google Calendar nao esta configurada no servidor", as variaveis nao foram lidas — confira o `.env` e reinicie.
+
+### Parte 2 — Conexao do usuario (cada um faz a sua)
+
+Depois que o servidor esta configurado, **cada usuario** que quiser sincronizar precisa conectar a propria conta Google. E rapido:
+
+1. Faca login no CRM com sua conta normal
+2. Va em **Configuracoes**
+3. Encontre o cartao **"Google Calendar"**
+4. Clique em **"Conectar com Google"**
+5. Voce e levado pra uma tela do Google pra escolher a conta e autorizar
+6. Marque a permissao de **"Ver e editar eventos do calendario"** (e a unica que pedimos)
+7. O Google te traz de volta pro CRM. Aparece a mensagem **"Google Calendar conectado com sucesso!"**
+
+A partir desse momento, todo compromisso novo cai automaticamente no seu Google Calendar.
+
+### Como funciona na pratica
+
+| Acao no CRM | O que acontece no Google |
+|---|---|
+| Criar compromisso | Evento e criado no calendario primario |
+| Editar compromisso (titulo, data, descricao, local) | Evento e atualizado |
+| Apagar compromisso | Evento e removido |
+| Editar um compromisso antigo (criado antes de conectar) | Evento e criado agora pela primeira vez |
+| Lead tem email | Lead vira convidado e recebe convite por email |
+
+> O titulo do evento e formado por: `Titulo do compromisso — Nome do lead` (quando ha lead).
+
+### Como desconectar
+
+1. Va em **Configuracoes > Google Calendar**
+2. Clique em **"Desconectar"**
+3. Confirme
+
+A sincronizacao para. Os eventos que ja existem no Google **nao sao apagados** — eles ficam la, mas nao sao mais atualizados pelo CRM.
+
+### Problemas comuns
+
+| Problema | Solucao |
+|---|---|
+| "Integracao com Google Calendar nao esta configurada no servidor" | O Admin precisa preencher `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` no `.env` e reiniciar o servidor |
+| "Nao recebemos a permissao completa do Google" apos clicar Conectar | Va em **myaccount.google.com/permissions**, remova o acesso do app e tente conectar de novo |
+| Erro `redirect_uri_mismatch` na tela do Google | A URL de callback no Google Cloud nao bate com a do servidor. Confira que adicionou exatamente `http://localhost:3001/api/auth/google-calendar/callback` (ou a URL de producao) nas URIs autorizadas |
+| Eventos nao aparecem mesmo conectado | Veja se o compromisso tem datas validas. Erros de sincronizacao ficam no log do servidor — nao quebram a criacao do compromisso no CRM |
+| Lead nao recebe convite por email | O lead precisa ter um **email cadastrado** no momento da criacao do compromisso |
+| App em modo de Teste no Google | Apenas usuarios de teste cadastrados conseguem conectar. Pra liberar pra todos, publique a tela de consentimento (passa por revisao do Google) |
+
+### Seguranca
+
+- O CRM **nao guarda sua senha do Google** — apenas um `refresh_token` que permite criar/editar eventos
+- O escopo solicitado e **apenas** `calendar.events` (ler/escrever eventos), o sistema nao acessa outros dados da sua conta Google
+- Quando voce desconecta, o token e revogado no Google
+- O log de auditoria registra **CONNECT_GOOGLE_CALENDAR** e **DISCONNECT_GOOGLE_CALENDAR** com data e usuario
+
+### Se nao quiser usar
+
+A sincronizacao e **opcional**. Se nao conectar, a agenda do CRM funciona normalmente — voce so nao tem o reflexo no Google Agenda.
+
+---
+
 ## Dicas de uso
 
 ### Pra vendedores
@@ -501,6 +653,7 @@ Tudo bem! O CRM funciona normalmente sem a Cloud API. Quando voce envia uma mens
 
 ### Pra admins
 - **Configure o WhatsApp** — a experiencia melhora muito com a integracao
+- **Configure o Google Calendar** — basta colocar as credenciais no `.env` uma vez; depois cada vendedor conecta a propria conta
 - **Desative usuarios que sairam** — nao apague, desative
 - **Exporte dados periodicamente** — mantenha backups em JSON ou Excel
 - **Personalize as etapas do pipeline** — adapte pra realidade do seu processo comercial
@@ -517,3 +670,4 @@ Tudo bem! O CRM funciona normalmente sem a Cloud API. Quando voce envia uma mens
 | Data | O que mudou |
 |---|---|
 | 2026-04-12 | Super Admin agora pode fazer todas as acoes de Admin ao entrar numa empresa (criar/editar usuarios, gerenciar pipeline, etc). Adicionada opcao de excluir usuarios permanentemente (antes so desativava). Botao "Excluir" disponivel tanto no painel do Super Admin quanto na tela de Usuarios. Super Admin agora pode excluir empresas permanentemente (com dupla confirmacao). |
+| 2026-05-07 | Integracao com Google Calendar. Cada usuario pode conectar a propria conta Google em Configuracoes > Google Calendar. Compromissos criados, atualizados ou apagados na agenda do CRM sao sincronizados automaticamente com o calendario primario do Google. Leads com email viram convidados nos eventos. Adicionado passo a passo de configuracao no servidor (Google Cloud Console, OAuth, variaveis de ambiente) e o fluxo de conexao por usuario. |
