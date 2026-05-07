@@ -36,6 +36,8 @@ model User {
   email     String   @unique
   password  String?
   googleId  String?  @unique
+  googleCalendarRefreshToken String?
+  googleCalendarConnectedAt  DateTime?
   mustChangePassword Boolean @default(false)
   name      String
   role      UserRole @default(SELLER)
@@ -159,15 +161,16 @@ model LeadTag {
 }
 
 model Appointment {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  startDate   DateTime
-  endDate     DateTime
-  location    String?
-  completed   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  startDate     DateTime
+  endDate       DateTime
+  location      String?
+  completed     Boolean  @default(false)
+  googleEventId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   company   Company? @relation(fields: [companyId], references: [id])
   companyId String?

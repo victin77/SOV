@@ -4,6 +4,93 @@ import { authenticate } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import { firstString } from '../utils/request';
 import { companyWhere, getCompanyIdFromRequest } from '../utils/tenancy';
+import {
+  createCalendarEvent,
+  updateCalendarEvent,
+  deleteCalendarEvent,
+  type CalendarEventInput,
+} from '../utils/googleCalendar';
+
+interface AppointmentForSync {
+  id: string;
+  title: string;
+  description: string | null;
+  startDate: Date;
+  endDate: Date;
+  location: string | null;
+  lead: { name: string; email: string | null } | null;
+}
+
+function buildEventInput(appointment: AppointmentForSync): CalendarEventInput {
+  return {
+    title: `${appointment.title}${appointment.lead ? ` — ${appointment.lead.name}` : ''}`,
+    description: appointment.description,
+    startDate: appointment.startDate,
+    endDate: appointment.endDate,
+    location: appointment.location,
+    attendeeEmail: appointment.lead?.email || null,
+  };
+}
+
+async function syncCreate(userId: string, appointment: AppointmentForSync): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { googleCalendarRefreshToken: true },
+  });
+  if (!user?.googleCalendarRefreshToken) return;
+
+  try {
+    const eventId = await createCalendarEvent(user.googleCalendarRefreshToken, buildEventInput(appointment));
+    if (eventId) {
+      await prisma.appointment.update({
+        where: { id: appointment.id },
+        data: { googleEventId: eventId },
+      });
+    }
+  } catch (err) {
+    console.error('Falha ao sincronizar criacao no Google Calendar', err);
+  }
+}
+
+async function syncUpdate(userId: string, appointment: AppointmentForSync, googleEventId: string | null): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { googleCalendarRefreshToken: true },
+  });
+  if (!user?.googleCalendarRefreshToken) return;
+
+  try {
+    if (googleEventId) {
+      await updateCalendarEvent(user.googleCalendarRefreshToken, googleEventId, buildEventInput(appointment));
+    } else {
+      // Compromisso criado antes de conectar o Google: cria evento agora
+      const eventId = await createCalendarEvent(user.googleCalendarRefreshToken, buildEventInput(appointment));
+      if (eventId) {
+        await prisma.appointment.update({
+          where: { id: appointment.id },
+          data: { googleEventId: eventId },
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Falha ao sincronizar atualizacao no Google Calendar', err);
+  }
+}
+
+async function syncDelete(userId: string, googleEventId: string | null): Promise<void> {
+  if (!googleEventId) return;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { googleCalendarRefreshToken: true },
+  });
+  if (!user?.googleCalendarRefreshToken) return;
+
+  try {
+    await deleteCalendarEvent(user.googleCalendarRefreshToken, googleEventId);
+  } catch (err) {
+    console.error('Falha ao sincronizar exclusao no Google Calendar', err);
+  }
+}
 
 const router = Router();
 
@@ -92,7 +179,7 @@ router.post('/', async (req: Request, res: Response) => {
         companyId,
       },
       include: {
-        lead: { select: { id: true, name: true, company: true } },
+        lead: { select: { id: true, name: true, company: true, email: true } },
         user: { select: { id: true, name: true } },
       },
     });
@@ -112,6 +199,16 @@ router.post('/', async (req: Request, res: Response) => {
       action: 'CREATE_APPOINTMENT',
       entity: 'appointment',
       entityId: appointment.id,
+    });
+
+    await syncCreate(req.user!.userId, {
+      id: appointment.id,
+      title: appointment.title,
+      description: appointment.description,
+      startDate: appointment.startDate,
+      endDate: appointment.endDate,
+      location: appointment.location,
+      lead: appointment.lead ? { name: appointment.lead.name, email: appointment.lead.email } : null,
     });
 
     res.status(201).json(appointment);
@@ -159,7 +256,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
     const existingAppointment = await prisma.appointment.findFirst({
       where: appointmentWhere,
-      select: { id: true, companyId: true },
+      select: { id: true, companyId: true, googleEventId: true, userId: true },
     });
     if (!existingAppointment) {
       res.status(404).json({ error: 'Compromisso nao encontrado' });
@@ -170,7 +267,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       where: { id: appointmentId },
       data,
       include: {
-        lead: { select: { id: true, name: true, company: true } },
+        lead: { select: { id: true, name: true, company: true, email: true } },
         user: { select: { id: true, name: true } },
       },
     });
@@ -185,6 +282,20 @@ router.put('/:id', async (req: Request, res: Response) => {
         },
       });
     }
+
+    await syncUpdate(
+      existingAppointment.userId,
+      {
+        id: appointment.id,
+        title: appointment.title,
+        description: appointment.description,
+        startDate: appointment.startDate,
+        endDate: appointment.endDate,
+        location: appointment.location,
+        lead: appointment.lead ? { name: appointment.lead.name, email: appointment.lead.email } : null,
+      },
+      existingAppointment.googleEventId
+    );
 
     res.json(appointment);
   } catch (err) {
@@ -207,7 +318,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     }
     const appointment = await prisma.appointment.findFirst({
       where: deleteWhere,
-      select: { id: true, companyId: true },
+      select: { id: true, companyId: true, googleEventId: true, userId: true },
     });
     if (!appointment) {
       res.status(404).json({ error: 'Compromisso nao encontrado' });
@@ -222,6 +333,9 @@ router.delete('/:id', async (req: Request, res: Response) => {
       entity: 'appointment',
       entityId: appointmentId,
     });
+
+    await syncDelete(appointment.userId, appointment.googleEventId);
+
     res.json({ message: 'Compromisso removido' });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao remover compromisso' });

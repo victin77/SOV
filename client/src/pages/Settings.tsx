@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { User, Lock, Check, Moon, Sun, MessageCircle, BookOpen, Download, AlertTriangle, Trash2 } from 'lucide-react';
+import { User, Lock, Check, Moon, Sun, MessageCircle, BookOpen, Download, AlertTriangle, Trash2, Calendar, Link2, Unlink } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { api } from '../api/client';
@@ -40,6 +40,81 @@ export default function Settings() {
   const [deleteLeadsConfirmation, setDeleteLeadsConfirmation] = useState('');
   const [deletingLeads, setDeletingLeads] = useState(false);
   const [deleteLeadsResult, setDeleteLeadsResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const [gcalAvailable, setGcalAvailable] = useState(false);
+  const [gcalConnected, setGcalConnected] = useState(false);
+  const [gcalConnectedAt, setGcalConnectedAt] = useState<string | null>(null);
+  const [gcalLoading, setGcalLoading] = useState(true);
+  const [gcalActionPending, setGcalActionPending] = useState(false);
+  const [gcalMessage, setGcalMessage] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const refreshGoogleCalendarStatus = () => {
+    api.getGoogleCalendarStatus()
+      .then((data) => {
+        setGcalAvailable(data.available);
+        setGcalConnected(data.connected);
+        setGcalConnectedAt(data.connectedAt || null);
+      })
+      .catch(() => {
+        setGcalAvailable(false);
+      })
+      .finally(() => setGcalLoading(false));
+  };
+
+  useEffect(() => {
+    refreshGoogleCalendarStatus();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const gcal = params.get('gcal');
+    if (!gcal) return;
+
+    if (gcal === 'connected') {
+      setGcalMessage({ ok: true, msg: 'Google Calendar conectado com sucesso! Novos compromissos serao sincronizados automaticamente.' });
+      refreshGoogleCalendarStatus();
+    } else if (gcal === 'no_refresh') {
+      setGcalMessage({
+        ok: false,
+        msg: 'Nao recebemos a permissao completa do Google. Acesse myaccount.google.com/permissions, remova o acesso e tente conectar novamente.',
+      });
+    } else if (gcal === 'error') {
+      setGcalMessage({ ok: false, msg: 'Falha ao conectar com o Google Calendar. Tente novamente.' });
+    }
+
+    // Limpa a query string sem recarregar a pagina
+    params.delete('gcal');
+    const newUrl = window.location.pathname + (params.toString() ? `?${params.toString()}` : '');
+    window.history.replaceState({}, '', newUrl);
+  }, []);
+
+  const handleConnectGoogleCalendar = async () => {
+    setGcalActionPending(true);
+    setGcalMessage(null);
+    try {
+      const { url } = await api.startGoogleCalendarConnect();
+      window.location.href = url;
+    } catch (err) {
+      setGcalMessage({ ok: false, msg: (err as Error).message || 'Erro ao iniciar conexao' });
+      setGcalActionPending(false);
+    }
+  };
+
+  const handleDisconnectGoogleCalendar = async () => {
+    if (!confirm('Desconectar o Google Calendar? Compromissos futuros nao serao mais sincronizados.')) return;
+    setGcalActionPending(true);
+    setGcalMessage(null);
+    try {
+      await api.disconnectGoogleCalendar();
+      setGcalConnected(false);
+      setGcalConnectedAt(null);
+      setGcalMessage({ ok: true, msg: 'Google Calendar desconectado.' });
+    } catch (err) {
+      setGcalMessage({ ok: false, msg: (err as Error).message || 'Erro ao desconectar' });
+    } finally {
+      setGcalActionPending(false);
+    }
+  };
 
   useEffect(() => {
     if (!canManageCompany) return;
@@ -260,6 +335,68 @@ export default function Settings() {
             </p>
           </button>
         </div>
+      </div>
+
+      <div className="card p-4 sm:p-6">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <Calendar className="w-5 h-5 text-gray-400 dark:text-slate-300" />
+            <h3 className="font-semibold text-gray-900 dark:text-white">Google Calendar</h3>
+          </div>
+          {gcalConnected && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Conectado
+            </span>
+          )}
+        </div>
+
+        {gcalLoading ? (
+          <p className="text-sm text-gray-500 dark:text-slate-400">Verificando status...</p>
+        ) : !gcalAvailable ? (
+          <p className="text-sm text-gray-500 dark:text-slate-400">
+            Integracao com Google Calendar nao esta configurada no servidor.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-gray-600 dark:text-slate-300 mb-4">
+              Sincronize automaticamente os compromissos da agenda do CRM com o seu Google Calendar.
+              Quando voce criar, atualizar ou apagar um compromisso aqui, ele sera refletido la tambem.
+            </p>
+
+            {gcalConnected ? (
+              <div className="space-y-3">
+                {gcalConnectedAt && (
+                  <p className="text-xs text-gray-500 dark:text-slate-400">
+                    Conectado em {new Date(gcalConnectedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                  </p>
+                )}
+                <button
+                  onClick={handleDisconnectGoogleCalendar}
+                  disabled={gcalActionPending}
+                  className="btn-secondary flex items-center gap-2"
+                >
+                  <Unlink className="w-4 h-4" />
+                  {gcalActionPending ? 'Desconectando...' : 'Desconectar'}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleConnectGoogleCalendar}
+                disabled={gcalActionPending}
+                className="btn-primary flex items-center gap-2"
+              >
+                <Link2 className="w-4 h-4" />
+                {gcalActionPending ? 'Redirecionando...' : 'Conectar com Google'}
+              </button>
+            )}
+
+            {gcalMessage && (
+              <p className={`mt-3 text-sm ${gcalMessage.ok ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {gcalMessage.msg}
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       <div className="card p-4 sm:p-6">
