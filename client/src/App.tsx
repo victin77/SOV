@@ -20,6 +20,7 @@ import Notifications from './pages/Notifications';
 import WhatsAppInbox from './pages/WhatsAppInbox';
 import SuperAdmin from './pages/SuperAdmin';
 import SuperAdminCompany from './pages/SuperAdminCompany';
+import DocsPage from './pages/Docs';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -77,6 +78,7 @@ export default function App() {
       <Route path="/import-export" element={<PrivateRoute><ImportExport /></PrivateRoute>} />
       <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
       <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
+      <Route path="/docs" element={<PrivateRoute><DocsPage /></PrivateRoute>} />
 
       <Route path="/users" element={
         <PrivateRoute>

@@ -594,10 +594,10 @@ export default function Settings() {
           <h3 className="font-semibold text-gray-900 dark:text-white">Guia do Usuario</h3>
         </div>
         <p className="text-sm text-gray-600 dark:text-slate-300 mb-4">
-          Baixe o guia completo do CRM com passo a passo de todas as funcionalidades, dicas de uso e como configurar o WhatsApp.
+          Acesse a documentacao completa direto no app em <strong>Documentacao</strong> no menu lateral, ou baixe um arquivo HTML pra consultar offline (com busca, tema escuro e impressao em PDF).
         </p>
         <button onClick={downloadUserGuide} className="btn-primary flex items-center gap-2">
-          <Download className="w-4 h-4" /> Baixar guia completo
+          <Download className="w-4 h-4" /> Baixar guia offline
         </button>
       </div>
 
