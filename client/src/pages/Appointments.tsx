@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Plus, Calendar, Clock, MapPin, Check, Trash2, ChevronLeft, ChevronRight,
-  Pencil, Search,
+  Pencil, Search, Link2,
 } from 'lucide-react';
 import { api } from '../api/client';
 import type { Appointment, Lead } from '../types';
@@ -226,7 +226,17 @@ export default function Appointments() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <h4 className={`text-sm font-medium break-words ${appointment.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{appointment.title}</h4>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h4 className={`text-sm font-medium break-words ${appointment.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{appointment.title}</h4>
+                              {appointment.googleEventId && (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                                  title="Sincronizado com Google Calendar"
+                                >
+                                  <Link2 className="w-3 h-3" /> Google
+                                </span>
+                              )}
+                            </div>
                             {appointment.description && <p className="text-xs text-gray-500 mt-0.5 break-words">{appointment.description}</p>}
                           </div>
                           <div className="flex gap-1 flex-shrink-0">

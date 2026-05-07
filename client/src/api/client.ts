@@ -171,6 +171,17 @@ export const api = {
       body: JSON.stringify({ idToken }),
     }),
 
+  getGoogleCalendarStatus: () =>
+    request<{ available: boolean; connected: boolean; connectedAt?: string | null }>(
+      '/auth/google-calendar/status'
+    ),
+
+  startGoogleCalendarConnect: () =>
+    request<{ url: string }>('/auth/google-calendar/connect'),
+
+  disconnectGoogleCalendar: () =>
+    request<{ ok: boolean }>('/auth/google-calendar/disconnect', { method: 'POST' }),
+
   forgotPassword: (email: string) =>
     request<{ message: string }>('/auth/forgot-password', {
       method: 'POST',

@@ -105,6 +105,7 @@ export interface Appointment {
   endDate: string;
   location?: string;
   completed: boolean;
+  googleEventId?: string | null;
   createdAt: string;
   leadId: string;
   userId: string;

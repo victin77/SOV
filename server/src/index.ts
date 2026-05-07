@@ -5,6 +5,7 @@ import path from 'path';
 import rateLimit from 'express-rate-limit';
 import { prisma } from './utils/prisma';
 import authRoutes from './routes/auth';
+import googleCalendarRoutes from './routes/googleCalendar';
 import leadRoutes from './routes/leads';
 import pipelineRoutes from './routes/pipeline';
 import appointmentRoutes from './routes/appointments';
@@ -78,6 +79,7 @@ app.use('/api', globalLimiter);
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/auth/google-calendar', googleCalendarRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/pipeline', pipelineRoutes);
 app.use('/api/appointments', appointmentRoutes);
