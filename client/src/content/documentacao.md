@@ -21,9 +21,10 @@ Guia completo de como usar o CRM Leads. Escrito de forma simples pra qualquer pe
 13. [Notificacoes](#notificacoes)
 14. [Configuracoes](#configuracoes)
 15. [Painel do Super Admin](#painel-do-super-admin)
-16. [Como configurar o WhatsApp](#como-configurar-o-whatsapp)
-17. [Como configurar o Google Calendar](#como-configurar-o-google-calendar)
-18. [Dicas de uso](#dicas-de-uso)
+16. [Como configurar o WhatsApp (Cloud API)](#como-configurar-o-whatsapp)
+17. [Como configurar o WhatsApp via QR Code](#como-configurar-o-whatsapp-via-qr-code)
+18. [Como configurar o Google Calendar](#como-configurar-o-google-calendar)
+19. [Dicas de uso](#dicas-de-uso)
 
 ---
 
@@ -179,15 +180,85 @@ Use etiquetas pra categorizar leads (ex: "Indicacao", "Site", "Evento"). Filtros
 
 ## WhatsApp
 
-O CRM tem integracao com WhatsApp pra voce conversar com leads sem sair do sistema.
+O CRM tem integracao com WhatsApp pra voce conversar com leads sem sair do sistema. Existem **duas formas** de conectar — voce escolhe qual fica melhor pro seu caso.
 
-### Como funciona
+### Os dois modos de conexao
 
-Existem 3 modos, dependendo da configuracao:
+| | **Cloud API (oficial Meta)** | **QR Code (estilo WhatsApp Web)** |
+|---|---|---|
+| Como conecta | Cadastrando token e numero no painel da Meta | Escaneando um QR Code com o celular |
+| Tempo pra configurar | 30-60 minutos (passa por aprovacao) | ~2 minutos |
+| Custo | Gratis ate 1.000 conversas/mes, depois R$0,25-0,80 por conversa | Gratis |
+| Estabilidade | Muito estavel, suportado oficialmente pela Meta | Pode cair eventualmente, precisa reconectar |
+| Risco de banimento | **Zero** (e a forma oficial) | **Existe** — Meta pode bloquear o numero se identificar uso de cliente nao oficial |
+| O numero usado | Precisa ser exclusivo (NAO pode estar no WhatsApp do celular) | Funciona com o WhatsApp normal do celular |
+| Volume recomendado | Qualquer volume, inclusive alto | Volume baixo a medio |
+| Quando ideal | Empresa formal, alto volume, operacao seria | Comecar rapido, vendedor pessoal, testar a feature |
 
-1. **Cloud API configurada** — mensagens vao e voltam direto pelo sistema. Voce envia e recebe tudo dentro do CRM.
-2. **Fallback por variavel de ambiente** — o servidor usa uma config global se a empresa nao tiver a propria.
-3. **Fallback por link** — se nada estiver configurado, o sistema abre o WhatsApp Web com a mensagem pronta pra voce enviar manualmente.
+> [!IMPORTANT]
+> Os dois modos podem coexistir na mesma empresa. Por exemplo: a empresa configura a Cloud API como oficial, mas alguns vendedores tambem conectam o WhatsApp pessoal via QR pra atender clientes proprios.
+
+### Cloud API — a forma oficial
+
+E a integracao recomendada pra empresas que vao usar WhatsApp como canal serio. A Meta da o servico e cobra apos os primeiros 1.000 atendimentos do mes.
+
+**Vantagens:**
+- Sem risco de banimento — voce esta dentro das regras da Meta
+- Mensagens vao e vem instantaneamente
+- Suporta envio em massa (com regras), templates aprovados, botoes interativos
+- Conexao nao cai
+
+**Pontos de atencao:**
+- Precisa de uma conta no Meta for Business e passar pela verificacao da empresa
+- O numero usado **nao pode** estar logado no app WhatsApp comum
+- Tem custo apos 1.000 conversas/mes
+
+Como configurar: veja [Como configurar o WhatsApp (Cloud API)](#como-configurar-o-whatsapp).
+
+### QR Code — a forma rapida
+
+Funciona como o **WhatsApp Web**: voce abre o app no celular, escaneia o QR que aparece no CRM e pronto, conectado. Por baixo dos panos, o servidor mantem uma sessao ativa com o WhatsApp.
+
+**Vantagens:**
+- Conecta em 2 minutos, sem burocracia
+- Usa o **mesmo numero** que voce ja tem no celular
+- Cada vendedor pode conectar o pessoal pra atender clientes seus
+- Custo zero
+
+**Pontos de atencao (importante ler antes!):**
+
+> [!CAUTION]
+> **A conexao por QR Code nao e oficial da Meta.** Ela usa engenharia reversa do protocolo do WhatsApp Web. A Meta pode, a qualquer momento, identificar que o numero esta sendo usado por um cliente nao oficial e **bloquear o numero**. Nao da pra prever quando isso acontece, mas e mais comum quando o numero envia muitas mensagens em pouco tempo, ou mensagens iguais pra muitos contatos diferentes.
+
+**Outras limitacoes:**
+- A sessao pode cair sozinha — se o celular ficar muitos dias sem conexao com a internet, voce vai precisar escanear o QR de novo
+- Nao escala bem — cada numero ocupa uma sessao no servidor; conectar 50 vendedores ao mesmo tempo deixa o servidor pesado
+- Recursos limitados: nao tem templates aprovados, nao tem botoes interativos, nao tem envio em massa "oficial"
+- Se voce desconectar o WhatsApp Web no celular, a sessao do CRM cai junto
+
+**Quando usar QR Code esta OK:**
+- Voce esta comecando e quer testar antes de investir na Cloud API
+- Conversas em volume baixo a medio (ate dezenas por dia, nao centenas)
+- Cada vendedor usa o proprio numero pra atender clientes pessoais
+- Voce nao quer (ou nao consegue ainda) passar pela verificacao da Meta
+
+**Quando NAO usar QR Code:**
+- Volume alto (centenas/milhares de mensagens por dia) — banimento quase certo
+- Numero principal da empresa que voce nao pode perder de jeito nenhum
+- Disparos em massa (lista de leads em frio, marketing) — risco altissimo
+
+Como configurar: veja [Como configurar o WhatsApp via QR Code](#como-configurar-o-whatsapp-via-qr-code).
+
+### Numero da empresa vs. numero pessoal
+
+Cada vendedor escolhe nas Configuracoes qual numero o CRM vai usar pra mandar mensagens dele:
+
+- **Numero da empresa** — o que o admin configurou (Cloud API ou QR compartilhado). Todos os vendedores enviam pelo mesmo numero, e respostas chegam no inbox geral.
+- **Meu numero** — o vendedor cadastrou o proprio (geralmente via QR). Mensagens enviadas pela ficha do lead saem pelo numero pessoal dele, e respostas chegam direto pra ele.
+
+A escolha fica em **Configuracoes > WhatsApp via QR Code > "Qual numero usar pra enviar mensagens?"**.
+
+Se a opcao escolhida nao estiver conectada no momento do envio, o CRM tenta automaticamente: **QR pessoal -> QR da empresa -> Cloud API -> link do WhatsApp Web** (fallback final).
 
 ### Tela de conversas
 
@@ -197,12 +268,14 @@ No menu lateral, clique em **"WhatsApp"**. Voce vera:
 - Campo pra digitar e enviar mensagens
 - Busca pra encontrar conversas
 
+A tela funciona igual pros dois modos (Cloud API e QR) — voce nao precisa se preocupar com qual esta ativo.
+
 ### Enviando mensagem pela ficha do lead
 
 Voce tambem pode enviar WhatsApp direto da pagina de detalhes de um lead, sem precisar ir na tela de conversas.
 
 ### Dica
-Pra ter a melhor experiencia (enviar e receber mensagens dentro do CRM), configure a Cloud API do WhatsApp. Veja a secao [Como configurar o WhatsApp](#como-configurar-o-whatsapp).
+Pra empresas comecando, a recomendacao e: **usar QR Code pra testar e validar a feature** com volume baixo, e **migrar pra Cloud API** quando o volume aumentar ou quando o WhatsApp virar canal critico.
 
 ---
 
@@ -418,7 +491,7 @@ Clique em **"Desativar"** pra bloquear o acesso de todos os usuarios daquela emp
 
 ## Como configurar o WhatsApp
 
-Este e o guia passo a passo pra conectar o WhatsApp da sua empresa ao CRM.
+Este e o guia passo a passo pra conectar o WhatsApp da sua empresa ao CRM via **Cloud API** (oficial da Meta). Se voce quer a forma rapida via QR Code, veja [Como configurar o WhatsApp via QR Code](#como-configurar-o-whatsapp-via-qr-code).
 
 ### Pra que serve
 
@@ -509,6 +582,130 @@ Pra receber mensagens dos clientes no CRM:
 ### Se nao quiser configurar agora
 
 Tudo bem! O CRM funciona normalmente sem a Cloud API. Quando voce envia uma mensagem WhatsApp, o sistema abre o WhatsApp Web com a mensagem pronta. Voce so precisa clicar "Enviar". A diferenca e que o historico nao fica salvo no CRM.
+
+Voce tambem pode usar o QR Code como alternativa rapida — veja a proxima secao.
+
+---
+
+## Como configurar o WhatsApp via QR Code
+
+Este e o jeito mais rapido de conectar o WhatsApp ao CRM. Voce escaneia um QR Code com o celular (igual o WhatsApp Web) e pronto. **Antes de configurar, leia a secao [WhatsApp](#whatsapp) pra entender as diferencas e os riscos** entre QR Code e Cloud API.
+
+### Quem deve fazer
+
+- **Admin/Gerente** — pode criar uma conexao **da empresa** (compartilhada entre todos os vendedores)
+- **Vendedor** — pode criar a propria conexao pessoal
+
+### Pra que serve
+
+- Conectar em 2 minutos sem precisar de conta de desenvolvedor na Meta
+- Usar o WhatsApp pessoal pra atender leads
+- Testar a feature de WhatsApp no CRM antes de investir na Cloud API
+
+### O que voce precisa
+
+1. Um celular com o **WhatsApp instalado e logado** no numero que vai usar
+2. O numero precisa estar com **internet** durante a conexao inicial (depois pode desligar)
+
+> [!WARNING]
+> Esse modo de conexao **nao e oficial** da Meta. Existe risco de bloqueio do numero, especialmente se voce mandar muitas mensagens em pouco tempo ou disparos em massa. **Nao use o numero principal da empresa que voce nao pode perder.** Pra usos serios e alto volume, configure a [Cloud API oficial](#como-configurar-o-whatsapp).
+
+### Passo 1: Decidir o tipo de conexao
+
+Voce precisa decidir antes:
+
+- **Conexao da empresa** (so admin/gerente pode criar) — todos os vendedores podem usar esse numero. As mensagens enviadas saem como se fossem da empresa, e respostas caem no inbox geral.
+- **Conexao pessoal** (qualquer vendedor) — apenas voce usa. Util pra atender clientes proprios pelo seu numero.
+
+### Passo 2: Criar a conexao no CRM
+
+1. Faca login no CRM
+2. Va em **Configuracoes**
+3. Encontre a secao **"WhatsApp via QR Code"**
+4. Clique em **"Conectar novo numero via QR"**
+5. Preencha:
+   - **Nome da conexao** — algo descritivo, ex: "WhatsApp Vendas" ou "Meu numero pessoal"
+   - **Compartilhar com toda a empresa** — marque so se voce e admin/gerente E quer que seja a conexao oficial da empresa
+6. Clique em **"Criar e gerar QR"**
+
+### Passo 3: Escanear o QR Code
+
+Um QR Code vai aparecer na tela. Pra escanear:
+
+1. Abra o **WhatsApp no celular**
+2. Toque nos **tres pontinhos** (Android) ou em **Configuracoes** (iPhone)
+3. Toque em **"Aparelhos conectados"** (ou "Dispositivos conectados")
+4. Toque em **"Conectar um aparelho"**
+5. Aponte a camera pro QR Code do CRM
+6. Aguarde uns segundos — o status muda pra **"Conectado"**
+
+### Passo 4: Definir como o CRM vai usar
+
+Ainda em Configuracoes, na pergunta **"Qual numero usar pra enviar mensagens?"** escolha:
+
+- **Numero da empresa** — usar a conexao compartilhada
+- **Meu numero** — usar a conexao pessoal que voce acabou de criar
+
+A partir daqui, quando voce mandar mensagens pelo CRM, vai sair pelo numero escolhido. Mensagens recebidas dos clientes vao cair na tela **WhatsApp** (inbox).
+
+### Passo 5: Testar
+
+1. Va em um lead que tenha telefone cadastrado
+2. Envie uma mensagem WhatsApp pela ficha
+3. Confira no celular — a mensagem deve aparecer como enviada pelo seu numero
+4. Responda do celular do cliente (ou peca alguem pra mandar uma mensagem pro seu numero)
+5. A resposta deve aparecer na tela **WhatsApp** do CRM em poucos segundos
+
+### O que fazer se cair a conexao
+
+A conexao QR pode cair eventualmente — celular sem internet por muito tempo, voce desconectou o WhatsApp Web no celular, ou a Meta resetou as sessoes. Se acontecer:
+
+1. Va em **Configuracoes > WhatsApp via QR Code**
+2. Sua conexao vai aparecer com status **"Desconectado"**
+3. Clique no botao de **reconectar** (icone de duas setas)
+4. Um novo QR vai aparecer — escaneie de novo
+
+> [!TIP]
+> Mantenha o celular conectado a internet. O WhatsApp do celular precisa estar online pelo menos uma vez a cada algumas semanas pra manter a sessao viva.
+
+### Boas praticas pra reduzir risco de banimento
+
+Se voce vai usar QR Code, siga essas praticas pra minimizar o risco:
+
+1. **Nao mande mensagens iguais em massa** — a Meta detecta padrao de spam
+2. **Espere alguns segundos entre cada envio** — disparos rapidissimos sao bandeira vermelha
+3. **Conversas reais, nao prospeccao em frio** — responder leads que pediram contato e seguro; mandar mensagem pra lista de numeros desconhecidos e arriscado
+4. **Nao saia adicionando contatos aleatorios** — se voce manda mensagem pra muita gente que nunca te enviou nada antes, o algoritmo da Meta sinaliza
+5. **Use um numero "secundario"** — um chip dedicado, nao o numero principal pessoal
+6. **Tenha plano B** — se for canal critico, ja vai configurando a Cloud API em paralelo
+
+### Custos
+
+Conexao via QR Code e **gratis**. Voce so paga o chip do numero usado.
+
+### Problemas comuns
+
+| Problema | Solucao |
+|---|---|
+| QR Code nao aparece | Espere uns segundos, ou clique em **reconectar** |
+| QR expirou | E normal, ele se renova a cada ~20 segundos. Se nao escanear a tempo, espere o proximo |
+| "Numero ja conectado em outro dispositivo" | Voce pode estar com WhatsApp Web aberto em outro lugar usando o mesmo numero. Feche o outro |
+| Sessao cai depois de poucos minutos | Verifique se o celular ficou sem internet ou se voce desconectou o WhatsApp Web manualmente |
+| Numero foi banido | Acontece, infelizmente. Voce vai precisar usar outro numero, e dessa vez seguir as boas praticas com mais cuidado. Considerar a Cloud API |
+
+### Comparando com a Cloud API
+
+| | QR Code | Cloud API |
+|---|---|---|
+| Tempo pra configurar | ~2 minutos | ~30-60 minutos |
+| Custo | Gratis | Gratis ate 1.000 conversas/mes, depois R$0,25-0,80 cada |
+| Risco de banimento | **Existe** | **Zero** |
+| Estabilidade | Pode cair, precisa reconectar | Muito estavel |
+| Numero usado | Funciona com qualquer numero do WhatsApp normal | Numero exclusivo, fora do app comum |
+| Recursos extras | Nenhum | Templates, botoes, listas, mensagens interativas |
+| Escalabilidade | Volume baixo a medio | Qualquer volume |
+
+A escolha entre os dois nao e definitiva — voce pode usar QR pra comecar, validar o uso do canal, e quando o volume crescer migrar pra Cloud API. Os dois modos coexistem.
 
 ---
 
@@ -686,3 +883,4 @@ A sincronizacao e **opcional**. Se nao conectar, a agenda do CRM funciona normal
 |---|---|
 | 2026-04-12 | Super Admin agora pode fazer todas as acoes de Admin ao entrar numa empresa (criar/editar usuarios, gerenciar pipeline, etc). Adicionada opcao de excluir usuarios permanentemente (antes so desativava). Botao "Excluir" disponivel tanto no painel do Super Admin quanto na tela de Usuarios. Super Admin agora pode excluir empresas permanentemente (com dupla confirmacao). |
 | 2026-05-07 | Integracao com Google Calendar. Cada usuario pode conectar a propria conta Google em Configuracoes > Google Calendar. Compromissos criados, atualizados ou apagados na agenda do CRM sao sincronizados automaticamente com o calendario primario do Google. Leads com email viram convidados nos eventos. Adicionado passo a passo de configuracao no servidor (Google Cloud Console, OAuth, variaveis de ambiente) e o fluxo de conexao por usuario. |
+| 2026-05-07 | WhatsApp via QR Code adicionado como alternativa a Cloud API. Vendedores podem conectar o proprio numero escaneando QR Code (estilo WhatsApp Web) em Configuracoes > WhatsApp via QR Code. Cada usuario escolhe entre usar o numero da empresa (compartilhado) ou o pessoal. Os dois modos coexistem. Documentadas as diferencas, riscos (incluindo possivel banimento por uso nao oficial) e boas praticas. |
