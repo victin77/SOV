@@ -234,7 +234,10 @@ export default function Settings() {
                 ? 'border-primary-500 bg-primary-50 dark:border-primary-400 dark:bg-slate-800'
                 : 'border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900'
             }`}
-            onClick={() => setTheme('light')}
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              setTheme('light', { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+            }}
           >
             <span className="flex items-center gap-2 font-medium text-gray-900 dark:text-white">
               <Sun className="w-4 h-4" /> Modo claro
@@ -250,7 +253,10 @@ export default function Settings() {
                 ? 'border-primary-400 bg-slate-800'
                 : 'border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900'
             }`}
-            onClick={() => setTheme('dark')}
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              setTheme('dark', { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+            }}
           >
             <span className="flex items-center gap-2 font-medium text-gray-900 dark:text-white">
               <Moon className="w-4 h-4" /> Modo escuro

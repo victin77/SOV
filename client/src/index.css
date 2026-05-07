@@ -103,3 +103,69 @@ html.dark .card {
 }
 html.dark ::-webkit-scrollbar-thumb { background: #334155; }
 html.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* ──────────────────────────────────────────────────────────────
+   Theme transition — circle reveal a partir do ponto clicado.
+   Usa a View Transitions API (Chrome/Edge/Safari TP). Em
+   navegadores sem suporte, a troca acontece sem animação.
+   ────────────────────────────────────────────────────────────── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+/* Light → Dark: o NOVO (escuro) cresce a partir do clique */
+html[data-theme-transition='dark']::view-transition-new(root) {
+  animation: theme-ripple-in 600ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+html[data-theme-transition='dark']::view-transition-old(root) {
+  animation: theme-fade-hold 600ms linear forwards;
+}
+
+/* Dark → Light: o ANTIGO (escuro) encolhe pro clique, revelando o claro */
+html[data-theme-transition='light']::view-transition-new(root) {
+  animation: theme-fade-hold 600ms linear forwards;
+  z-index: 1;
+}
+html[data-theme-transition='light']::view-transition-old(root) {
+  animation: theme-ripple-out 600ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  z-index: 2;
+}
+
+@keyframes theme-ripple-in {
+  from {
+    clip-path: circle(0 at var(--theme-ripple-x, 50%) var(--theme-ripple-y, 50%));
+  }
+  to {
+    clip-path: circle(var(--theme-ripple-r, 150vmax) at var(--theme-ripple-x, 50%) var(--theme-ripple-y, 50%));
+  }
+}
+
+@keyframes theme-ripple-out {
+  from {
+    clip-path: circle(var(--theme-ripple-r, 150vmax) at var(--theme-ripple-x, 50%) var(--theme-ripple-y, 50%));
+  }
+  to {
+    clip-path: circle(0 at var(--theme-ripple-x, 50%) var(--theme-ripple-y, 50%));
+  }
+}
+
+@keyframes theme-fade-hold {
+  from { opacity: 1; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
