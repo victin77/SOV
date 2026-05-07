@@ -128,6 +128,39 @@ export async function sendLeadWhatsAppMessage(
   };
 }
 
+export async function findLeadByPhone(
+  prisma: PrismaClient,
+  phone: string,
+  companyId?: string | null,
+) {
+  const normalized = normalizePhoneNumber(phone);
+  if (!normalized) return null;
+
+  // Filtro grosso no SQL pelos últimos 4 dígitos (sempre ficam juntos
+  // mesmo em telefones formatados tipo "(11) 98765-4321"); depois match
+  // exato em memória comparando o telefone normalizado, o que cobre
+  // diferenças de máscara, prefixo 55, espaços, parênteses, hífens etc.
+  const tail = normalized.slice(-4);
+  const candidates = await prisma.lead.findMany({
+    where: {
+      ...(companyId ? { companyId } : {}),
+      phone: { not: null, contains: tail },
+    },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      assignedToId: true,
+      companyId: true,
+      status: true,
+      stageId: true,
+    },
+    take: 200,
+  });
+
+  return candidates.find((c) => normalizePhoneNumber(c.phone) === normalized) || null;
+}
+
 export async function ingestInboundWhatsAppMessage(
   prisma: PrismaClient,
   params: {
@@ -141,54 +174,22 @@ export async function ingestInboundWhatsAppMessage(
   const normalizedFrom = normalizePhoneNumber(params.from);
   if (!normalizedFrom) return null;
 
-  const phoneTail = normalizedFrom.slice(-8);
-  const possibleLeads = await prisma.lead.findMany({
-    where: {
-      ...(params.companyId ? { companyId: params.companyId } : {}),
-      phone: { not: null, contains: phoneTail },
-    },
-    select: {
-      id: true,
-      name: true,
-      phone: true,
-      assignedToId: true,
-      companyId: true,
-      status: true,
-      stageId: true,
-    },
-    take: 50,
-  });
+  const lead = await findLeadByPhone(prisma, params.from, params.companyId);
 
-  let lead = possibleLeads.find((item) => normalizePhoneNumber(item.phone) === normalizedFrom) || null;
-
+  // Se não achou lead, guarda como mensagem pendente — o usuário decide
+  // se quer promover a lead na UI do inbox.
   if (!lead) {
-    const stages = await prisma.pipelineStage.findMany({
-      where: params.companyId ? { companyId: params.companyId } : undefined,
-      orderBy: { order: 'asc' },
-    });
-    const defaultStage = getDefaultStage(stages);
-    const pipelinePosition = await getNextPipelinePosition(prisma, defaultStage?.id);
-
-    lead = await prisma.lead.create({
+    if (!params.companyId) return null;
+    const pending = await prisma.whatsAppPendingMessage.create({
       data: {
-        name: params.contactName || `WhatsApp ${normalizedFrom.slice(-4)}`,
-        phone: normalizedFrom,
-        companyId: params.companyId || null,
-        source: 'whatsapp-inbound',
-        status: 'NEW',
-        stageId: defaultStage?.id,
-        pipelinePosition,
-      },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        assignedToId: true,
-        companyId: true,
-        status: true,
-        stageId: true,
+        fromNumber: normalizedFrom,
+        contactName: params.contactName,
+        message: params.message,
+        provider: params.provider || 'cloud_api',
+        companyId: params.companyId,
       },
     });
+    return { pending };
   }
 
   const activity = await prisma.activity.create({
@@ -221,4 +222,78 @@ export async function ingestInboundWhatsAppMessage(
   }
 
   return { lead, activity };
+}
+
+export async function promoteWhatsAppPendingToLead(
+  prisma: PrismaClient,
+  params: {
+    fromNumber: string;
+    companyId: string;
+    leadName?: string;
+    assignedToId?: string;
+  },
+) {
+  const normalized = normalizePhoneNumber(params.fromNumber);
+  if (!normalized) {
+    throw new Error('Telefone inválido');
+  }
+
+  // Busca todas as mensagens pendentes desse número na empresa
+  const pendingMessages = await prisma.whatsAppPendingMessage.findMany({
+    where: { companyId: params.companyId, fromNumber: normalized },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  if (pendingMessages.length === 0) {
+    throw new Error('Nenhuma mensagem pendente desse número');
+  }
+
+  // Cria o lead com nome do contato (ou nome inventado) e telefone normalizado
+  const stages = await prisma.pipelineStage.findMany({
+    where: { companyId: params.companyId },
+    orderBy: { order: 'asc' },
+  });
+  const defaultStage = getDefaultStage(stages);
+  const pipelinePosition = await getNextPipelinePosition(prisma, defaultStage?.id);
+
+  const fallbackContact = pendingMessages.find((m) => m.contactName)?.contactName;
+  const leadName = (params.leadName?.trim() || fallbackContact || `WhatsApp ${normalized.slice(-4)}`).trim();
+
+  const lead = await prisma.lead.create({
+    data: {
+      name: leadName,
+      phone: normalized,
+      companyId: params.companyId,
+      assignedToId: params.assignedToId,
+      source: 'whatsapp-inbound',
+      status: 'NEW',
+      stageId: defaultStage?.id,
+      pipelinePosition,
+    },
+  });
+
+  // Move mensagens pendentes pra Activity vinculada ao lead novo
+  await prisma.$transaction([
+    prisma.activity.createMany({
+      data: pendingMessages.map((m) => ({
+        type: 'WHATSAPP_RECEIVED',
+        description: `Mensagem recebida de ${lead.name}`,
+        leadId: lead.id,
+        companyId: params.companyId,
+        createdAt: m.createdAt,
+        metadata: {
+          direction: 'inbound',
+          provider: m.provider,
+          message: m.message,
+          preview: previewMessage(m.message),
+          phone: normalized,
+        },
+      })),
+    }),
+    prisma.whatsAppPendingMessage.deleteMany({
+      where: { companyId: params.companyId, fromNumber: normalized },
+    }),
+  ]);
+
+  return { lead, movedCount: pendingMessages.length };
 }

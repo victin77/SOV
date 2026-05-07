@@ -289,8 +289,9 @@ model Company {
   activities          Activity[]
   notifications       Notification[]
   auditLogs           AuditLog[]
-  whatsappConfig      CompanyWhatsAppConfig?
-  whatsappQrSessions  WhatsAppQrSession[]
+  whatsappConfig          CompanyWhatsAppConfig?
+  whatsappQrSessions      WhatsAppQrSession[]
+  whatsappPendingMessages WhatsAppPendingMessage[]
 
   @@map("companies")
 }
@@ -346,4 +347,20 @@ model WhatsAppQrSession {
   @@index([companyId])
   @@index([userId])
   @@map("whatsapp_qr_sessions")
+}
+
+model WhatsAppPendingMessage {
+  id           String   @id @default(cuid())
+  fromNumber   String
+  contactName  String?
+  message      String
+  provider     String   @default("qr")
+  createdAt    DateTime @default(now())
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+
+  @@index([companyId, fromNumber])
+  @@index([companyId, createdAt])
+  @@map("whatsapp_pending_messages")
 }
