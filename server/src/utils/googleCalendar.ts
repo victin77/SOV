@@ -18,8 +18,16 @@ export interface CalendarEventInput {
 function getRedirectUri(): string {
   const explicit = process.env.GOOGLE_CALENDAR_REDIRECT_URI;
   if (explicit) return explicit;
-  const base = process.env.APP_URL || 'http://localhost:3001';
-  return `${base.replace(/\/$/, '')}/api/auth/google-calendar/callback`;
+
+  // Em producao, frontend e backend compartilham o mesmo APP_URL.
+  // Em dev, frontend (Vite) e backend (Express) ficam em portas diferentes,
+  // entao o redirect precisa apontar pro backend explicitamente.
+  if (process.env.NODE_ENV === 'production' && process.env.APP_URL) {
+    return `${process.env.APP_URL.replace(/\/$/, '')}/api/auth/google-calendar/callback`;
+  }
+
+  const port = process.env.PORT || '3001';
+  return `http://localhost:${port}/api/auth/google-calendar/callback`;
 }
 
 export function isCalendarSyncEnabled(): boolean {

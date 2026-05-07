@@ -17,6 +17,7 @@ const STATE_COOKIE_MAX_AGE_MS = 10 * 60 * 1000; // 10 min
 const FRONTEND_RETURN_PATH = '/settings?gcal=';
 
 function frontendUrl(suffix: string): string {
+  // APP_URL no projeto ja aponta pro frontend (igual aos links de reset de senha).
   const base = process.env.APP_URL || 'http://localhost:5173';
   return `${base.replace(/\/$/, '')}${FRONTEND_RETURN_PATH}${suffix}`;
 }
