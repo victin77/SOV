@@ -31,6 +31,19 @@ enum Priority {
   URGENT
 }
 
+enum WhatsAppPreference {
+  COMPANY
+  PERSONAL
+}
+
+enum WhatsAppQrStatus {
+  DISCONNECTED
+  CONNECTING
+  QR_PENDING
+  CONNECTED
+  ERROR
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -44,6 +57,7 @@ model User {
   avatar    String?
   phone     String?
   whatsappNumber String?
+  whatsappPreference WhatsAppPreference @default(COMPANY)
   active    Boolean  @default(true)
   lastSeenAt DateTime?
   createdAt DateTime @default(now())
@@ -58,6 +72,7 @@ model User {
   notifications Notification[]
   refreshTokens RefreshToken[]
   passwordResetTokens PasswordResetToken[]
+  whatsappQrSessions  WhatsAppQrSession[]
 
   @@map("users")
 }
@@ -266,15 +281,16 @@ model Company {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users             User[]
-  leads             Lead[]
-  pipelineStages    PipelineStage[]
-  tags              Tag[]
-  appointments      Appointment[]
-  activities        Activity[]
-  notifications     Notification[]
-  auditLogs         AuditLog[]
-  whatsappConfig    CompanyWhatsAppConfig?
+  users               User[]
+  leads               Lead[]
+  pipelineStages      PipelineStage[]
+  tags                Tag[]
+  appointments        Appointment[]
+  activities          Activity[]
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+  whatsappConfig      CompanyWhatsAppConfig?
+  whatsappQrSessions  WhatsAppQrSession[]
 
   @@map("companies")
 }
@@ -308,4 +324,26 @@ model CompanyWhatsAppConfig {
   companyId String  @unique
 
   @@map("company_whatsapp_configs")
+}
+
+model WhatsAppQrSession {
+  id           String           @id @default(cuid())
+  label        String
+  status       WhatsAppQrStatus @default(DISCONNECTED)
+  phoneNumber  String?
+  lastQr       String?
+  lastError    String?
+  connectedAt  DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String?
+
+  @@index([companyId])
+  @@index([userId])
+  @@map("whatsapp_qr_sessions")
 }

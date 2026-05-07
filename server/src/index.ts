@@ -21,6 +21,7 @@ import companyRoutes from './routes/company';
 import superAdminRoutes from './routes/superAdmin';
 import { ensureDefaultCompanyAndBackfill } from './utils/tenancy';
 import { ensureSuperAdmin } from './utils/bootstrap';
+import { bootstrapQrSessions } from './utils/whatsappQr';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -123,6 +124,10 @@ async function start() {
       console.log('⚠ Running in FALLBACK mode (no database)');
     }
   });
+
+  if (process.env.FALLBACK_MODE !== 'true') {
+    bootstrapQrSessions().catch((err) => console.error('[QR Bootstrap] error:', err));
+  }
 }
 
 start();

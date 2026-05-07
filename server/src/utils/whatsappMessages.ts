@@ -3,6 +3,7 @@ import { logAudit } from './audit';
 import { getNextPipelinePosition, getDefaultStage } from './pipeline';
 import { buildWhatsAppLink, isWhatsAppCloudConfigured, normalizePhoneNumber, sendWhatsAppCloudMessage } from './whatsapp';
 import { resolveCompanyWhatsAppConfig } from './companyWhatsApp';
+import { resolveQrSessionForUser, sendViaQrSession } from './whatsappQr';
 
 const WHATSAPP_ACTIVITY_TYPES = ['WHATSAPP_SENT', 'WHATSAPP_RECEIVED'] as const;
 
@@ -69,10 +70,15 @@ export async function sendLeadWhatsAppMessage(
   }
 
   const resolvedConfig = await resolveCompanyWhatsAppConfig(prisma, lead.companyId);
-  let provider: 'company_config' | 'env_fallback' | 'link_only' = resolvedConfig.provider;
+  let provider: 'company_config' | 'env_fallback' | 'link_only' | 'qr' = resolvedConfig.provider;
   let providerResponse: unknown = null;
 
-  if (isWhatsAppCloudConfigured(resolvedConfig)) {
+  const qrSession = lead.companyId ? await resolveQrSessionForUser(params.userId, lead.companyId) : null;
+
+  if (qrSession) {
+    providerResponse = await sendViaQrSession(qrSession.id, normalizedPhone, params.message);
+    provider = 'qr';
+  } else if (isWhatsAppCloudConfigured(resolvedConfig)) {
     providerResponse = await sendWhatsAppCloudMessage({
       to: normalizedPhone,
       message: params.message,

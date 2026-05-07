@@ -20,3 +20,7 @@ Thumbs.db
 
 .claude/
 HANDOFF_*.md
+
+# WhatsApp Baileys auth — contém credenciais da sessão (NUNCA commitar)
+server/wa-qr-auth/
+server/wa-auth/

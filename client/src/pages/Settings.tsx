@@ -6,6 +6,7 @@ import { api } from '../api/client';
 import type { CompanySettingsResponse } from '../types';
 import { downloadUserGuide } from '../utils/userGuide';
 import { ROLE_LABELS } from '../types';
+import WhatsAppQrSection from '../components/WhatsAppQrSection';
 
 const DELETE_ALL_LEADS_CONFIRMATION = 'APAGAR TODOS OS LEADS';
 
@@ -411,10 +412,11 @@ export default function Settings() {
           <h3 className="font-semibold text-gray-900 dark:text-white">WhatsApp no CRM</h3>
         </div>
         <p className="text-sm text-gray-600 dark:text-slate-300">
-          O envio e feito dentro do CRM pela ficha do lead. Se a Cloud API do WhatsApp estiver configurada no backend,
-          a mensagem sai direto pelo sistema. Se nao estiver, o CRM ainda gera o link de conversa como fallback.
+          Você pode conectar via <strong>Cloud API</strong> (oficial, configurada abaixo pelo admin) ou via <strong>QR Code</strong> (mais simples, escaneando com o celular). Se ambos estiverem disponíveis, o CRM prioriza o QR escolhido na sua preferência.
         </p>
       </div>
+
+      <WhatsAppQrSection />
 
       {canManageCompany && (
         <div className="card p-4 sm:p-6 space-y-6">
