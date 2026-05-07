@@ -14,7 +14,7 @@ import {
 import {
   LayoutDashboard, Users, Target, Kanban, Calendar, Tags,
   Upload, Shield, Bell, BellRing, LogOut, Menu, Moon, Sun,
-  X, ChevronDown, User, Settings, MessageCircle, ArrowLeft, BookOpen,
+  X, ChevronDown, User, Settings, MessageCircle, ArrowLeft,
 } from 'lucide-react';
 import type { Appointment } from '../types';
 
@@ -35,7 +35,6 @@ const NAV_ITEMS = [
   { path: '/users', label: 'Usuários', icon: Users, roles: ['ADMIN', 'MANAGER', 'SUPER_ADMIN'] },
   { path: '/import-export', label: 'Importar/Exportar', icon: Upload },
   { path: '/audit', label: 'Auditoria', icon: Shield, roles: ['ADMIN', 'MANAGER', 'SUPER_ADMIN'] },
-  { path: '/docs', label: 'Documentação', icon: BookOpen },
 ];
 
 function appointmentReminderMessage(appointment: Appointment) {
