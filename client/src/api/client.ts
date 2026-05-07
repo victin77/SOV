@@ -422,6 +422,21 @@ export const api = {
       }
     ),
 
+  // WhatsApp pendentes (números desconhecidos)
+  getWhatsAppPending: (params?: Record<string, string>) => {
+    const query = params ? `?${new URLSearchParams(params).toString()}` : '';
+    return request<{ conversations: { fromNumber: string; contactName: string | null; lastMessage: string; lastAt: string; count: number }[] }>(`/whatsapp/pending${query}`);
+  },
+
+  getWhatsAppPendingMessages: (phone: string) =>
+    request<{ fromNumber: string; contactName: string | null; messages: { id: string; text: string; provider: string; createdAt: string }[] }>(`/whatsapp/pending/${encodeURIComponent(phone)}/messages`),
+
+  promoteWhatsAppPending: (phone: string, data?: { name?: string; assignedToId?: string }) =>
+    request<{ ok: boolean; lead: { id: string; name: string; phone: string | null }; movedCount: number }>(
+      `/whatsapp/pending/${encodeURIComponent(phone)}/promote`,
+      { method: 'POST', body: JSON.stringify(data || {}) },
+    ),
+
   // WhatsApp QR + Preference
   getWhatsAppPreference: () =>
     request<{ preference: 'COMPANY' | 'PERSONAL' }>('/whatsapp/preference'),

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { AlertCircle, MessageCircle, RefreshCw, Search, Send } from 'lucide-react';
+import { AlertCircle, MessageCircle, RefreshCw, Search, Send, UserPlus, Loader2, X } from 'lucide-react';
 import { api } from '../api/client';
 import {
   STATUS_COLORS,
@@ -11,6 +11,20 @@ import {
   type WhatsAppStatus,
 } from '../types';
 import { PageLoading } from '../components/LoadingSpinner';
+
+type PendingConversation = {
+  fromNumber: string;
+  contactName: string | null;
+  lastMessage: string;
+  lastAt: string;
+  count: number;
+};
+
+type PendingThread = {
+  fromNumber: string;
+  contactName: string | null;
+  messages: { id: string; text: string; provider: string; createdAt: string }[];
+};
 
 function formatDateLabel(value: string) {
   return new Date(value).toLocaleString('pt-BR', {
@@ -40,6 +54,55 @@ export default function WhatsAppInbox() {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<'leads' | 'pending'>('leads');
+  const [pendingConversations, setPendingConversations] = useState<PendingConversation[]>([]);
+  const [selectedPendingPhone, setSelectedPendingPhone] = useState<string | null>(null);
+  const [pendingThread, setPendingThread] = useState<PendingThread | null>(null);
+  const [pendingThreadLoading, setPendingThreadLoading] = useState(false);
+  const [promoteOpen, setPromoteOpen] = useState(false);
+  const [promoting, setPromoting] = useState(false);
+
+  const loadPendingConversations = async () => {
+    try {
+      const res = await api.getWhatsAppPending();
+      setPendingConversations(res.conversations);
+    } catch (err: any) {
+      setError(err.message || 'Não foi possível carregar pendentes.');
+    }
+  };
+
+  const loadPendingThread = async (phone: string) => {
+    setPendingThreadLoading(true);
+    try {
+      const res = await api.getWhatsAppPendingMessages(phone);
+      setPendingThread(res);
+    } catch (err: any) {
+      setError(err.message || 'Não foi possível carregar conversa pendente.');
+      setPendingThread(null);
+    } finally {
+      setPendingThreadLoading(false);
+    }
+  };
+
+  const handlePromote = async (name: string) => {
+    if (!selectedPendingPhone) return;
+    setPromoting(true);
+    try {
+      const res = await api.promoteWhatsAppPending(selectedPendingPhone, { name: name.trim() || undefined });
+      setPromoteOpen(false);
+      setSelectedPendingPhone(null);
+      setPendingThread(null);
+      await Promise.all([loadPendingConversations(), loadConversations(searchQuery)]);
+      // Trocar para aba de leads e abrir o lead recém criado
+      setActiveTab('leads');
+      setSearchParams({ leadId: res.lead.id });
+    } catch (err: any) {
+      setError(err.message || 'Falha ao adicionar como lead.');
+    } finally {
+      setPromoting(false);
+    }
+  };
 
   const loadConversations = async (query?: string) => {
     const response = await api.getWhatsAppConversations(query ? { search: query } : undefined);
@@ -97,6 +160,21 @@ export default function WhatsAppInbox() {
 
     loadThread(selectedLeadId);
   }, [selectedLeadId]);
+
+  useEffect(() => {
+    if (activeTab === 'pending') {
+      loadPendingConversations();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'pending') return;
+    if (!selectedPendingPhone) {
+      setPendingThread(null);
+      return;
+    }
+    loadPendingThread(selectedPendingPhone);
+  }, [selectedPendingPhone, activeTab]);
 
   const currentConversation = useMemo(
     () => conversations.find((conversation) => conversation.lead.id === selectedLeadId) || null,
@@ -191,6 +269,47 @@ export default function WhatsAppInbox() {
         </div>
       )}
 
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-gray-200 dark:border-slate-700">
+        <button
+          onClick={() => setActiveTab('leads')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            activeTab === 'leads'
+              ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-300'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200'
+          }`}
+        >
+          Leads
+        </button>
+        <button
+          onClick={() => setActiveTab('pending')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+            activeTab === 'pending'
+              ? 'border-amber-600 text-amber-600 dark:border-amber-400 dark:text-amber-300'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200'
+          }`}
+        >
+          Pendentes
+          {pendingConversations.length > 0 && (
+            <span className="bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full font-semibold">
+              {pendingConversations.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'pending' && (
+        <PendingTab
+          conversations={pendingConversations}
+          selectedPhone={selectedPendingPhone}
+          onSelectPhone={setSelectedPendingPhone}
+          thread={pendingThread}
+          threadLoading={pendingThreadLoading}
+          onPromoteClick={() => setPromoteOpen(true)}
+        />
+      )}
+
+      {activeTab === 'leads' && (
       <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[340px,minmax(0,1fr)]">
         <div className={`card p-0 overflow-hidden ${selectedLeadId ? 'hidden xl:block' : ''}`}>
           <div className="p-4 border-b border-gray-200 dark:border-slate-700">
@@ -360,6 +479,235 @@ export default function WhatsAppInbox() {
               </div>
             </>
           )}
+        </div>
+      </div>
+      )}
+
+      {promoteOpen && selectedPendingPhone && (
+        <PromoteModal
+          phone={selectedPendingPhone}
+          defaultName={pendingThread?.contactName || ''}
+          submitting={promoting}
+          onClose={() => setPromoteOpen(false)}
+          onConfirm={handlePromote}
+        />
+      )}
+    </div>
+  );
+}
+
+function PendingTab({
+  conversations,
+  selectedPhone,
+  onSelectPhone,
+  thread,
+  threadLoading,
+  onPromoteClick,
+}: {
+  conversations: PendingConversation[];
+  selectedPhone: string | null;
+  onSelectPhone: (phone: string | null) => void;
+  thread: PendingThread | null;
+  threadLoading: boolean;
+  onPromoteClick: () => void;
+}) {
+  return (
+    <>
+      <div className="card p-4 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20">
+        <p className="text-sm text-amber-800 dark:text-amber-200">
+          <strong>Conversas de números desconhecidos.</strong> Esses números mandaram mensagem pelo WhatsApp mas ainda não viraram leads. Veja a conversa antes de decidir se quer adicionar como lead.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[340px,minmax(0,1fr)]">
+        {/* Lista de pendentes */}
+        <div className={`card p-0 overflow-hidden ${selectedPhone ? 'hidden xl:block' : ''}`}>
+          <div className="p-4 border-b border-gray-200 dark:border-slate-700">
+            <p className="text-sm font-semibold text-gray-700 dark:text-slate-200">
+              {conversations.length === 0 ? 'Nenhuma conversa pendente' : `${conversations.length} ${conversations.length === 1 ? 'número' : 'números'} aguardando`}
+            </p>
+          </div>
+          <div className="max-h-[72vh] overflow-y-auto">
+            {conversations.map((c) => {
+              const active = c.fromNumber === selectedPhone;
+              return (
+                <button
+                  key={c.fromNumber}
+                  onClick={() => onSelectPhone(c.fromNumber)}
+                  className={`w-full text-left px-4 py-4 border-b border-gray-100 dark:border-slate-700 transition-colors ${
+                    active ? 'bg-amber-50 dark:bg-amber-900/20' : 'hover:bg-gray-50 dark:hover:bg-slate-700/50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 dark:text-white truncate">
+                        {c.contactName || `+${c.fromNumber}`}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 truncate">
+                        {c.contactName ? `+${c.fromNumber}` : 'Contato sem nome'}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <span className="text-[11px] text-gray-400 dark:text-slate-500">
+                        {new Date(c.lastAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {c.count > 1 && (
+                        <span className="text-[10px] bg-amber-100 dark:bg-amber-800 text-amber-700 dark:text-amber-200 px-1.5 py-0.5 rounded">
+                          {c.count} msgs
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-slate-300 mt-2 line-clamp-2">
+                    {c.lastMessage}
+                  </p>
+                </button>
+              );
+            })}
+            {conversations.length === 0 && (
+              <div className="p-6 text-center">
+                <p className="text-sm text-gray-500 dark:text-slate-400">
+                  Quando alguém te mandar mensagem por um número que não está cadastrado, aparece aqui.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Mensagens da conversa selecionada */}
+        <div className="card p-0 overflow-hidden min-h-[72vh] flex flex-col">
+          {!selectedPhone && (
+            <div className="flex-1 flex items-center justify-center p-8 text-center">
+              <div>
+                <p className="text-base font-semibold text-gray-900 dark:text-white">Selecione uma conversa</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+                  Clique em um número à esquerda pra ver as mensagens.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {selectedPhone && (
+            <>
+              <div className="p-4 border-b border-gray-200 dark:border-slate-700 flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2 min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => onSelectPhone(null)}
+                    className="xl:hidden p-2 -ml-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center"
+                    aria-label="Voltar"
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                  </button>
+                  <div className="min-w-0">
+                    <p className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white truncate">
+                      {thread?.contactName || `+${selectedPhone}`}
+                    </p>
+                    {thread?.contactName && (
+                      <p className="text-sm text-gray-500 dark:text-slate-400 truncate">+{selectedPhone}</p>
+                    )}
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      Número não cadastrado como lead
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onPromoteClick}
+                  className="btn-primary flex items-center gap-2 flex-shrink-0"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Adicionar como lead</span>
+                  <span className="sm:hidden">Adicionar</span>
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-slate-900/50">
+                {threadLoading && (
+                  <div className="text-sm text-gray-500 dark:text-slate-400">Carregando…</div>
+                )}
+                {!threadLoading && thread && (
+                  <div className="space-y-3">
+                    {thread.messages.map((m) => (
+                      <div key={m.id} className="flex justify-start">
+                        <div className="max-w-[80%] rounded-2xl px-4 py-3 shadow-sm bg-white text-gray-800 border border-gray-200 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600">
+                          <p className="text-sm whitespace-pre-wrap">{m.text}</p>
+                          <p className="text-[11px] mt-2 text-gray-400 dark:text-slate-500">
+                            {new Date(m.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 text-xs text-gray-500 dark:text-slate-400 text-center">
+                Adicione esse número como lead pra poder responder.
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function PromoteModal({
+  phone,
+  defaultName,
+  submitting,
+  onClose,
+  onConfirm,
+}: {
+  phone: string;
+  defaultName: string;
+  submitting: boolean;
+  onClose: () => void;
+  onConfirm: (name: string) => void;
+}) {
+  const [name, setName] = useState(defaultName);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
+          <h3 className="font-semibold text-gray-900 dark:text-white">Adicionar como lead</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="label">Nome do lead</label>
+            <input
+              className="input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Como esse contato vai aparecer no CRM"
+              autoFocus
+            />
+            {!defaultName && (
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                Sem nome do contato disponível. Você pode deixar em branco — vai virar "WhatsApp {phone.slice(-4)}".
+              </p>
+            )}
+          </div>
+          <div className="text-sm text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-900/30 rounded p-3">
+            <p>📱 Telefone: <strong>+{phone}</strong></p>
+            <p className="mt-1">As mensagens da conversa vão ser movidas pro histórico do lead novo.</p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button onClick={onClose} className="btn-secondary">Cancelar</button>
+            <button
+              onClick={() => onConfirm(name)}
+              disabled={submitting}
+              className="btn-primary inline-flex items-center gap-2"
+            >
+              {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              Adicionar como lead
+            </button>
+          </div>
         </div>
       </div>
     </div>

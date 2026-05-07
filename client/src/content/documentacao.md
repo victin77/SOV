@@ -262,11 +262,22 @@ Se a opcao escolhida nao estiver conectada no momento do envio, o CRM tenta auto
 
 ### Tela de conversas
 
-No menu lateral, clique em **"WhatsApp"**. Voce vera:
-- Lista de conversas com leads (lado esquerdo)
+No menu lateral, clique em **"WhatsApp"**. A tela tem **duas abas**:
+
+**Aba "Leads"** — conversas com numeros que ja sao leads cadastrados no CRM:
+- Lista de conversas (lado esquerdo)
 - Mensagens da conversa selecionada (lado direito)
 - Campo pra digitar e enviar mensagens
 - Busca pra encontrar conversas
+
+**Aba "Pendentes"** — conversas com numeros desconhecidos (que ainda nao sao leads):
+- Mostra mensagens recebidas de pessoas que nao estao no CRM
+- Voce pode ver a conversa antes de decidir se a pessoa vira lead
+- Botao **"Adicionar como lead"** cria o lead com o nome do contato (ou um nome que voce escolher) e move todas as mensagens pra ficha dele
+- Numeros que voce nao quiser adicionar ficam la sem incomodar
+
+> [!TIP]
+> Mensagens de spam, propaganda, ou pessoas que mandaram errado nao poluem mais seu pipeline. Antes do CRM criava lead automatico pra qualquer numero que mandava mensagem; agora a decisao e sua.
 
 A tela funciona igual pros dois modos (Cloud API e QR) — voce nao precisa se preocupar com qual esta ativo.
 
@@ -884,3 +895,4 @@ A sincronizacao e **opcional**. Se nao conectar, a agenda do CRM funciona normal
 | 2026-04-12 | Super Admin agora pode fazer todas as acoes de Admin ao entrar numa empresa (criar/editar usuarios, gerenciar pipeline, etc). Adicionada opcao de excluir usuarios permanentemente (antes so desativava). Botao "Excluir" disponivel tanto no painel do Super Admin quanto na tela de Usuarios. Super Admin agora pode excluir empresas permanentemente (com dupla confirmacao). |
 | 2026-05-07 | Integracao com Google Calendar. Cada usuario pode conectar a propria conta Google em Configuracoes > Google Calendar. Compromissos criados, atualizados ou apagados na agenda do CRM sao sincronizados automaticamente com o calendario primario do Google. Leads com email viram convidados nos eventos. Adicionado passo a passo de configuracao no servidor (Google Cloud Console, OAuth, variaveis de ambiente) e o fluxo de conexao por usuario. |
 | 2026-05-07 | WhatsApp via QR Code adicionado como alternativa a Cloud API. Vendedores podem conectar o proprio numero escaneando QR Code (estilo WhatsApp Web) em Configuracoes > WhatsApp via QR Code. Cada usuario escolhe entre usar o numero da empresa (compartilhado) ou o pessoal. Os dois modos coexistem. Documentadas as diferencas, riscos (incluindo possivel banimento por uso nao oficial) e boas praticas. |
+| 2026-05-07 | WhatsApp: corrigido bug de duplicacao de leads quando o numero estava cadastrado com formatacao (parenteses, hifens, espacos) — agora o match identifica corretamente independente da mascara usada. Mensagens de numeros desconhecidos NAO criam mais lead automatico — vao pra aba "Pendentes" no inbox, com botao "Adicionar como lead" pra voce decidir caso a caso. |

@@ -4,7 +4,12 @@ import { prisma } from '../utils/prisma';
 import { authenticate } from '../middleware/auth';
 import { firstString } from '../utils/request';
 import { normalizePhoneNumber } from '../utils/whatsapp';
-import { ingestInboundWhatsAppMessage, mapWhatsAppActivity, sendLeadWhatsAppMessage } from '../utils/whatsappMessages';
+import {
+  ingestInboundWhatsAppMessage,
+  mapWhatsAppActivity,
+  promoteWhatsAppPendingToLead,
+  sendLeadWhatsAppMessage,
+} from '../utils/whatsappMessages';
 import { companyWhere, getCompanyIdFromRequest } from '../utils/tenancy';
 import {
   resolveCompanyIdByPhoneNumberId,
@@ -373,6 +378,119 @@ router.post('/conversations/:leadId/messages', async (req: Request, res: Respons
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao enviar mensagem do WhatsApp' });
+  }
+});
+
+// ===================== Pendentes (números desconhecidos) =====================
+
+// Lista conversas pendentes (uma por número, com última mensagem e contagem)
+router.get('/pending', async (req: Request, res: Response) => {
+  const companyId = getCompanyIdFromRequest(req);
+  const search = firstString(req.query.search)?.trim();
+
+  const where = {
+    companyId,
+    ...(search ? { fromNumber: { contains: search.replace(/\D/g, '') } } : {}),
+  };
+
+  const messages = await prisma.whatsAppPendingMessage.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+  });
+
+  const grouped = new Map<string, {
+    fromNumber: string;
+    contactName: string | null;
+    lastMessage: string;
+    lastAt: Date;
+    count: number;
+  }>();
+
+  for (const m of messages) {
+    const existing = grouped.get(m.fromNumber);
+    if (!existing) {
+      grouped.set(m.fromNumber, {
+        fromNumber: m.fromNumber,
+        contactName: m.contactName || null,
+        lastMessage: m.message,
+        lastAt: m.createdAt,
+        count: 1,
+      });
+    } else {
+      existing.count += 1;
+      if (!existing.contactName && m.contactName) {
+        existing.contactName = m.contactName;
+      }
+    }
+  }
+
+  const conversations = Array.from(grouped.values()).sort(
+    (a, b) => b.lastAt.getTime() - a.lastAt.getTime(),
+  );
+
+  res.json({ conversations });
+});
+
+// Lista mensagens de um número pendente específico
+router.get('/pending/:phone/messages', async (req: Request, res: Response) => {
+  const companyId = getCompanyIdFromRequest(req);
+  const phone = firstString(req.params.phone);
+  if (!phone) {
+    res.status(400).json({ error: 'Número inválido' });
+    return;
+  }
+
+  const fromNumber = phone.replace(/\D/g, '');
+  const messages = await prisma.whatsAppPendingMessage.findMany({
+    where: { companyId, fromNumber },
+    orderBy: { createdAt: 'asc' },
+    take: 200,
+  });
+
+  if (messages.length === 0) {
+    res.status(404).json({ error: 'Nenhuma mensagem pendente desse número' });
+    return;
+  }
+
+  res.json({
+    fromNumber,
+    contactName: messages.find((m) => m.contactName)?.contactName || null,
+    messages: messages.map((m) => ({
+      id: m.id,
+      text: m.message,
+      provider: m.provider,
+      createdAt: m.createdAt,
+    })),
+  });
+});
+
+// Promove um número pendente a Lead (cria lead e move mensagens)
+router.post('/pending/:phone/promote', async (req: Request, res: Response) => {
+  const companyId = getCompanyIdFromRequest(req);
+  const phone = firstString(req.params.phone);
+  if (!phone) {
+    res.status(400).json({ error: 'Número inválido' });
+    return;
+  }
+
+  const { name, assignedToId } = req.body as { name?: string; assignedToId?: string };
+  const fromNumber = phone.replace(/\D/g, '');
+
+  try {
+    const result = await promoteWhatsAppPendingToLead(prisma, {
+      fromNumber,
+      companyId,
+      leadName: name,
+      assignedToId: assignedToId || req.user!.userId,
+    });
+    res.status(201).json({
+      ok: true,
+      lead: { id: result.lead.id, name: result.lead.name, phone: result.lead.phone },
+      movedCount: result.movedCount,
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Falha ao promover lead' });
   }
 });
 
