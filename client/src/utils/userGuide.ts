@@ -1,4 +1,4 @@
-import { marked } from 'marked';
+import { marked, Parser } from 'marked';
 import documentacaoMd from '../content/documentacao.md?raw';
 
 // ──────────────────────────────────────────────────────────────────────
@@ -71,13 +71,13 @@ function buildMarkedRenderer(): { renderer: any; sections: { id: string; title: 
     if (depth === 2 || depth === 3) {
       sections.push({ id, title: text, level: depth as 2 | 3 });
     }
-    const inner = (marked as any).parser?.parseInline?.(tokens) ?? escapeHtml(text);
+    const inner = Parser.parseInline(tokens) ?? escapeHtml(text);
     return `<h${depth} id="${id}" class="docs-heading docs-h${depth}">${inner}</h${depth}>`;
   };
 
   // Callouts: > [!NOTE] ... transforma em div colorida
   renderer.blockquote = ({ tokens }: any) => {
-    const inner = (marked as any).parser?.parse?.(tokens) ?? '';
+    const inner = Parser.parse(tokens) ?? '';
     const match = inner.match(/<p>\s*\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]\s*([\s\S]*?)<\/p>([\s\S]*)/);
     if (match) {
       const kind = match[1].toUpperCase();
@@ -115,19 +115,19 @@ function buildMarkedRenderer(): { renderer: any; sections: { id: string; title: 
 
   renderer.table = ({ header, rows }: any) => {
     const headerHtml = header
-      .map((c: any) => `<th>${(marked as any).parser.parseInline(c.tokens)}</th>`)
+      .map((c: any) => `<th>${Parser.parseInline(c.tokens)}</th>`)
       .join('');
     const rowsHtml = rows
       .map(
         (row: any[]) =>
-          `<tr>${row.map((c: any) => `<td>${(marked as any).parser.parseInline(c.tokens)}</td>`).join('')}</tr>`
+          `<tr>${row.map((c: any) => `<td>${Parser.parseInline(c.tokens)}</td>`).join('')}</tr>`
       )
       .join('');
     return `<div class="docs-table-wrap"><table class="docs-table"><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
   };
 
   renderer.link = ({ href, title, tokens }: any) => {
-    const inner = (marked as any).parser.parseInline(tokens);
+    const inner = Parser.parseInline(tokens);
     const isExternal = /^https?:\/\//.test(href || '');
     const attrs = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
     const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
