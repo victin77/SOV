@@ -3,12 +3,13 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeSlug from 'rehype-slug';
-import { Menu, BookOpen } from 'lucide-react';
+import { Menu, BookOpen, Download } from 'lucide-react';
 // Importados como string pra alternar conforme o tema (Vite ?inline)
 import lightHljs from 'highlight.js/styles/github.css?inline';
 import darkHljs from 'highlight.js/styles/github-dark.css?inline';
 import documentacaoRaw from '../../content/documentacao.md?raw';
 import { useTheme } from '../../contexts/ThemeContext';
+import { downloadUserGuide } from '../../utils/userGuide';
 import Sidebar, { extractSections } from './Sidebar';
 import { useMarkdownComponents } from './markdown';
 import ThemeToggle from './ThemeToggle';
@@ -123,8 +124,17 @@ export default function DocsPage() {
 
         {/* Conteúdo principal */}
         <main className="min-w-0 flex-1">
-          {/* Topbar desktop com toggle de tema */}
+          {/* Topbar desktop com baixar guia + toggle de tema */}
           <div className="sticky top-0 z-10 hidden items-center justify-end gap-3 border-b border-gray-200 bg-white/70 px-6 py-3 backdrop-blur lg:flex dark:border-slate-800 dark:bg-slate-900/70">
+            <button
+              type="button"
+              onClick={downloadUserGuide}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700"
+              title="Baixa um arquivo HTML que abre offline"
+            >
+              <Download className="h-4 w-4" />
+              Baixar guia
+            </button>
             <span className="text-xs font-medium text-gray-500 dark:text-slate-400">
               Tema
             </span>
