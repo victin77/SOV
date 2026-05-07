@@ -11,6 +11,7 @@ import {
   resolveCompanyIdByWebhookToken,
   resolveCompanyWhatsAppConfig,
 } from '../utils/companyWhatsApp';
+import { startQrSession, stopQrSession, qrManager } from '../utils/whatsappQr';
 
 const router = Router();
 const WHATSAPP_ACTIVITY_TYPES = ['WHATSAPP_SENT', 'WHATSAPP_RECEIVED'] as const;
@@ -373,6 +374,157 @@ router.post('/conversations/:leadId/messages', async (req: Request, res: Respons
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao enviar mensagem do WhatsApp' });
   }
+});
+
+// ===================== QR Code (Baileys) =====================
+
+router.get('/preference', async (req: Request, res: Response) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    select: { whatsappPreference: true },
+  });
+  res.json({ preference: user?.whatsappPreference || 'COMPANY' });
+});
+
+router.put('/preference', async (req: Request, res: Response) => {
+  const { preference } = req.body as { preference?: string };
+  if (preference !== 'COMPANY' && preference !== 'PERSONAL') {
+    res.status(400).json({ error: 'Preferência inválida' });
+    return;
+  }
+  await prisma.user.update({
+    where: { id: req.user!.userId },
+    data: { whatsappPreference: preference },
+  });
+  res.json({ ok: true });
+});
+
+router.get('/qr-sessions', async (req: Request, res: Response) => {
+  const companyId = getCompanyIdFromRequest(req);
+  const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'MANAGER';
+
+  const where = isAdmin
+    ? { companyId }
+    : { companyId, OR: [{ userId: req.user!.userId }, { userId: null }] };
+
+  const sessions = await prisma.whatsAppQrSession.findMany({
+    where,
+    select: {
+      id: true,
+      label: true,
+      status: true,
+      phoneNumber: true,
+      userId: true,
+      lastError: true,
+      connectedAt: true,
+      createdAt: true,
+      user: { select: { id: true, name: true } },
+    },
+    orderBy: [{ userId: 'asc' }, { createdAt: 'desc' }],
+  });
+
+  res.json({ sessions });
+});
+
+router.post('/qr-sessions', async (req: Request, res: Response) => {
+  const companyId = getCompanyIdFromRequest(req);
+  const { label, isCompany } = req.body as { label?: string; isCompany?: boolean };
+
+  if (!label?.trim()) {
+    res.status(400).json({ error: 'Nome é obrigatório' });
+    return;
+  }
+
+  const wantsCompany = Boolean(isCompany);
+  if (wantsCompany && req.user!.role !== 'ADMIN' && req.user!.role !== 'MANAGER') {
+    res.status(403).json({ error: 'Apenas admin/gerente pode criar conexão da empresa' });
+    return;
+  }
+
+  const session = await prisma.whatsAppQrSession.create({
+    data: {
+      label: label.trim(),
+      companyId,
+      userId: wantsCompany ? null : req.user!.userId,
+      status: 'CONNECTING',
+    },
+  });
+
+  startQrSession(session.id, companyId).catch((err) => console.error('[QR] start error:', err));
+
+  res.status(201).json({ session });
+});
+
+router.get('/qr-sessions/:id', async (req: Request, res: Response) => {
+  const companyId = getCompanyIdFromRequest(req);
+  const id = firstString(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'ID inválido' });
+    return;
+  }
+
+  const session = await prisma.whatsAppQrSession.findFirst({
+    where: { id, companyId },
+  });
+  if (!session) {
+    res.status(404).json({ error: 'Sessão não encontrada' });
+    return;
+  }
+  if (session.userId && session.userId !== req.user!.userId && req.user!.role !== 'ADMIN' && req.user!.role !== 'MANAGER') {
+    res.status(403).json({ error: 'Sem permissão' });
+    return;
+  }
+  res.json({ session });
+});
+
+router.post('/qr-sessions/:id/reconnect', async (req: Request, res: Response) => {
+  const companyId = getCompanyIdFromRequest(req);
+  const id = firstString(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'ID inválido' });
+    return;
+  }
+
+  const session = await prisma.whatsAppQrSession.findFirst({ where: { id, companyId } });
+  if (!session) {
+    res.status(404).json({ error: 'Sessão não encontrada' });
+    return;
+  }
+  if (session.userId && session.userId !== req.user!.userId && req.user!.role !== 'ADMIN' && req.user!.role !== 'MANAGER') {
+    res.status(403).json({ error: 'Sem permissão' });
+    return;
+  }
+
+  startQrSession(session.id, companyId).catch((err) => console.error('[QR] reconnect error:', err));
+  res.json({ ok: true });
+});
+
+router.delete('/qr-sessions/:id', async (req: Request, res: Response) => {
+  const companyId = getCompanyIdFromRequest(req);
+  const id = firstString(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'ID inválido' });
+    return;
+  }
+
+  const session = await prisma.whatsAppQrSession.findFirst({ where: { id, companyId } });
+  if (!session) {
+    res.status(404).json({ error: 'Sessão não encontrada' });
+    return;
+  }
+  if (session.userId && session.userId !== req.user!.userId && req.user!.role !== 'ADMIN' && req.user!.role !== 'MANAGER') {
+    res.status(403).json({ error: 'Sem permissão' });
+    return;
+  }
+  if (!session.userId && req.user!.role !== 'ADMIN' && req.user!.role !== 'MANAGER') {
+    res.status(403).json({ error: 'Sem permissão' });
+    return;
+  }
+
+  await stopQrSession(session.id);
+  await prisma.whatsAppQrSession.delete({ where: { id: session.id } });
+
+  res.json({ ok: true });
 });
 
 export default router;

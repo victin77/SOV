@@ -414,13 +414,35 @@ export const api = {
     request<any>(`/whatsapp/conversations/${leadId}/messages`),
 
   sendWhatsAppConversationMessage: (leadId: string, message: string) =>
-    request<{ ok: boolean; provider: 'company_config' | 'env_fallback' | 'link_only'; link?: string | null; message: any }>(
+    request<{ ok: boolean; provider: 'company_config' | 'env_fallback' | 'link_only' | 'qr'; link?: string | null; message: any }>(
       `/whatsapp/conversations/${leadId}/messages`,
       {
         method: 'POST',
         body: JSON.stringify({ message }),
       }
     ),
+
+  // WhatsApp QR + Preference
+  getWhatsAppPreference: () =>
+    request<{ preference: 'COMPANY' | 'PERSONAL' }>('/whatsapp/preference'),
+
+  setWhatsAppPreference: (preference: 'COMPANY' | 'PERSONAL') =>
+    request<{ ok: boolean }>('/whatsapp/preference', { method: 'PUT', body: JSON.stringify({ preference }) }),
+
+  getWhatsAppQrSessions: () =>
+    request<{ sessions: any[] }>('/whatsapp/qr-sessions'),
+
+  getWhatsAppQrSession: (id: string) =>
+    request<{ session: any }>(`/whatsapp/qr-sessions/${id}`),
+
+  createWhatsAppQrSession: (data: { label: string; isCompany: boolean }) =>
+    request<{ session: any }>('/whatsapp/qr-sessions', { method: 'POST', body: JSON.stringify(data) }),
+
+  reconnectWhatsAppQrSession: (id: string) =>
+    request<{ ok: boolean }>(`/whatsapp/qr-sessions/${id}/reconnect`, { method: 'POST' }),
+
+  deleteWhatsAppQrSession: (id: string) =>
+    request<{ ok: boolean }>(`/whatsapp/qr-sessions/${id}`, { method: 'DELETE' }),
 
   // Super Admin
   getSuperAdminDashboard: () =>
