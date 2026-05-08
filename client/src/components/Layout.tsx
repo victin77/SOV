@@ -210,7 +210,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [whatsappToasts]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
       {/* Impersonation banner */}
       {impersonation.active && (
         <div className="bg-indigo-600 text-white px-3 sm:px-4 py-2 flex items-center justify-between gap-2 z-[60] relative">
