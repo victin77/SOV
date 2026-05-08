@@ -210,7 +210,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [whatsappToasts]);
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Impersonation banner */}
       {impersonation.active && (
         <div className="bg-indigo-600 text-white px-3 sm:px-4 py-2 flex items-center justify-between gap-2 z-[60] relative">
@@ -328,7 +328,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </AnimatePresence>
 
       <motion.aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-out ${
+        className={`fixed lg:sticky lg:top-0 inset-y-0 left-0 z-50 w-64 lg:h-screen bg-white border-r border-gray-200 transform transition-transform duration-300 ease-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } flex flex-col`}
         initial={false}
@@ -489,7 +489,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main className="flex-1 p-4 lg:p-6">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
