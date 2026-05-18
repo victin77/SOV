@@ -51,8 +51,8 @@ export default function InstallPrompt() {
   return (
     <div className="fixed left-3 right-3 sm:left-auto sm:right-6 bottom-3 sm:bottom-6 safe-bottom sm:max-w-sm z-[60] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-primary-200 dark:border-primary-800 p-4">
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 grid place-items-center text-white text-xl shrink-0">
-          📊
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 grid place-items-center text-white font-extrabold text-lg shrink-0">
+          S
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-sm text-gray-900 dark:text-slate-100">Instalar SOV</div>
