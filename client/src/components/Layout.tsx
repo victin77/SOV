@@ -213,7 +213,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Impersonation banner */}
       {impersonation.active && (
-        <div className="bg-indigo-600 text-white px-3 sm:px-4 py-2 flex items-center justify-between gap-2 z-[60] relative">
+        <div className="bg-indigo-600 text-white px-3 sm:px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] flex items-center justify-between gap-2 z-[60] relative">
           <div className="flex items-center gap-2 text-sm min-w-0">
             <Shield className="w-4 h-4 flex-shrink-0" />
             <span className="truncate"><span className="hidden sm:inline">Voce esta dentro de: </span><strong>{impersonation.companyName}</strong></span>
@@ -243,7 +243,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       <AnimatePresence>
         {reminderToasts.length > 0 && (
-          <div className="fixed top-20 right-4 z-[70] space-y-3 w-[min(92vw,360px)]">
+          <div className="fixed top-[calc(5rem+env(safe-area-inset-top))] right-4 pr-[env(safe-area-inset-right)] z-[70] space-y-3 w-[min(92vw,360px)]">
             {reminderToasts.map((appointment) => (
               <motion.div
                 key={appointment.id}
@@ -286,7 +286,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       <AnimatePresence>
         {whatsappToasts.length > 0 && (
-          <div className="fixed top-20 right-4 z-[70] space-y-3 w-[min(92vw,360px)]" style={{ top: reminderToasts.length > 0 ? `${80 + reminderToasts.length * 120}px` : undefined }}>
+          <div
+            className="fixed right-4 pr-[env(safe-area-inset-right)] z-[70] space-y-3 w-[min(92vw,360px)]"
+            style={{
+              top:
+                reminderToasts.length > 0
+                  ? `calc(${80 + reminderToasts.length * 120}px + env(safe-area-inset-top))`
+                  : 'calc(5rem + env(safe-area-inset-top))',
+            }}
+          >
             {whatsappToasts.map((toast) => (
               <motion.div
                 key={toast.id}
@@ -333,7 +341,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         } flex flex-col`}
         initial={false}
       >
-        <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200">
+        <div className="min-h-16 pt-[env(safe-area-inset-top)] flex items-center justify-between px-6 border-b border-gray-200">
           <Link to="/" className="flex items-center gap-3">
             <motion.div
               className="w-9 h-9 bg-primary-600 rounded-xl flex items-center justify-center shadow-lg shadow-primary-600/20"
@@ -381,7 +389,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="p-3 border-t border-gray-200">
+        <div className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-gray-200">
           <div className="flex items-center gap-3 px-3 py-2 text-sm text-gray-600 bg-gray-50 rounded-xl">
             <div className="w-9 h-9 bg-primary-100 rounded-full flex items-center justify-center">
               <User className="w-4 h-4 text-primary-600" />
@@ -395,7 +403,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </motion.aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-4 lg:px-6 sticky top-0 z-30 backdrop-blur">
+        <header className="min-h-16 pt-[env(safe-area-inset-top)] bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-4 lg:px-6 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] sticky top-0 z-30 backdrop-blur">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -489,7 +497,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-6">
+        <main className="flex-1 p-4 lg:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
