@@ -1,6 +1,6 @@
 /* SOV Service Worker — bump CACHE_VERSION pra forçar atualização */
-const CACHE_VERSION = 'sov-v1';
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon-192.svg', '/icons/icon-512.svg'];
+const CACHE_VERSION = 'sov-v2';
+const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon-192.svg?v=2', '/icons/icon-512.svg?v=2'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
