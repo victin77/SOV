@@ -33,3 +33,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     )}
   </React.StrictMode>
 );
+
+// PWA: registra service worker só em produção (evita interferir no dev/HMR)
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* fail silent — PWA é progressivo */
+    });
+  });
+}

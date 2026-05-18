@@ -20,6 +20,7 @@ import Notifications from './pages/Notifications';
 import WhatsAppInbox from './pages/WhatsAppInbox';
 import SuperAdmin from './pages/SuperAdmin';
 import SuperAdminCompany from './pages/SuperAdminCompany';
+import InstallPrompt from './components/InstallPrompt';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -59,6 +60,7 @@ export default function App() {
   }
 
   return (
+    <>
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
       <Route path="/forgot-password" element={user ? <Navigate to="/" /> : <ForgotPassword />} />
@@ -95,5 +97,7 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
+    <InstallPrompt />
+    </>
   );
 }
